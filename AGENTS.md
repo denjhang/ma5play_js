@@ -28,6 +28,10 @@
   WAVE Channels）+ 非 MIDI 行播放期更新：ATR=atrCount+播放态、PCM 鼓行=
   ch9 鼓音符触发、ext wave 行=通道 (bankL,pc) 命中非 FM 音色归因
   （mwa 无触发时序暂不归因；AudioWorklet 48ch 快照后换实时数据源）
+- ✅ MA-5 wave 行归因重做（LG KG920 语料 20 文件静态验证）：**bankM=124**
+  通道 (bankL,pc) 命中 PCM 音色（注册序 ↔ ext 波 id 序），各行独立音高；
+  **bankM=125/bankL=0 = Mwa 流通道**，发声即亮（Note=stream）。
+  voice→wave 精确链接在 DLL 内，注册序是 parser 级近似。
 - ✅ 双后端同步可视化：getOutputTimestamp 真实发声时刻对齐（无延迟扣减）
 - ✅ 加载进度条（流式分段计）；手机竖屏/横屏布局；目录记忆/面包屑右优先/输入模式
 - ⬜ 进度条 seek（ma5w_seek_play 已就绪待接 UI）
