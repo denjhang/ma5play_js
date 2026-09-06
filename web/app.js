@@ -346,6 +346,7 @@ async function navigateTo(path, pushHist = true) {
   if (browser.path && pushHist) { browser.back.push(browser.path); browser.fwd = []; }
   browser.path = d.path; browser.parent = d.parent; browser.entries = d.entries;
   if (pushHist) addFolderHistory(d.path);
+  localStorage.setItem('lastDir', d.path);   // 记住上次打开的目录
   renderBrowser();
 }
 function addFolderHistory(p) {
@@ -516,5 +517,5 @@ window.__dbg = () => ({ q: S.queue.length, qFrames: S.qFrames, pcmRecv: S.pcmRec
 buildChGrid();
 log('[ui] ma5play 启动');
 bootWorker();
-navigateTo('');
+navigateTo(localStorage.getItem('lastDir') || '');   // 上次打开的目录（无记录用服务器默认）
 renderHistSelect();
