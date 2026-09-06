@@ -739,7 +739,7 @@ function renderHistSelect() {
 function renderBrowser() {
   $('navBack').disabled = !browser.back.length;
   $('navFwd').disabled = !browser.fwd.length;
-  $('navUp').disabled = !browser.parent;
+  $('navUp').disabled = browser.parent === null || browser.parent === undefined;   // 静态模式根目录 parent='' 可用
   renderCrumbs();
   const ul = $('fileList'); ul.innerHTML = '';
   for (const e of browser.entries) {
@@ -795,8 +795,16 @@ function renderCrumbs() {
   // 先全量渲染（不可见），从右往左保留能放下的段，左边折叠成 "..."
   const frag = document.createDocumentFragment();
   const segEls = [];
+  // 静态模式（无盘符的相对路径）：补根目录段，否则一级目录出不来（手机被困修复）
+  const isStaticPath = !/[A-Za-z]:[\\/]/.test(browser.path) && browser.path !== '';
+  if (isStaticPath) {
+    const home = document.createElement('span');
+    home.className = 'seg'; home.textContent = '⌂'; home.title = 'tracks';
+    home.onclick = () => navigateTo('');
+    frag.appendChild(home); segEls.push(home);
+  }
   parts.forEach((seg, i) => {
-    if (i) { const sp = document.createElement('span'); sp.className = 'sep'; sp.textContent = '›'; frag.appendChild(sp); }
+    if (i || isStaticPath) { const sp = document.createElement('span'); sp.className = 'sep'; sp.textContent = '›'; frag.appendChild(sp); }
     const s = document.createElement('span');
     s.className = 'seg'; s.textContent = seg; s.title = accPath(i);
     s.onclick = () => navigateTo(accPath(i));
@@ -890,7 +898,7 @@ $('vol').oninput = applyVolume;
 $('btnMute').onclick = () => { muted = !muted; $('btnMute').textContent = muted ? '🔇' : '🔊'; applyVolume(); };
 $('navBack').onclick = () => { if (browser.back.length) { browser.fwd.push(browser.path); navigateTo(browser.back.pop(), false); } };
 $('navFwd').onclick = () => { if (browser.fwd.length) { browser.back.push(browser.path); navigateTo(browser.fwd.pop(), false); } };
-$('navUp').onclick = () => browser.parent && navigateTo(browser.parent);
+$('navUp').onclick = () => { if (browser.parent !== null && browser.parent !== undefined) navigateTo(browser.parent); };   // 静态模式根目录 parent='' 也允许
 $('folderHist').onchange = e => { if (e.target.value) { navigateTo(e.target.value); e.target.value = ''; } };
 window.addEventListener('resize', () => { if (!crumbEditing) renderCrumbs(); });
 
