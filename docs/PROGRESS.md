@@ -283,3 +283,19 @@ smaf_window.cpp Render() 确认真实布局并复刻：
   MA-5 FM/PCM Voice、Wave data、4-op compact、MA-2 VMA、SoftBank legacy；
   + Mwa 块 Awa/Mwa stream/MSTR。表内 Voices/Waves 两个 registry 区。
 - 实测 Sound_1：11 行（仅用到通道）、7 voices + 4 waves 全部分类正确。
+
+### 通道表对齐 ma2play 分版本设计（用户：MA-2/3/5 表完全不同）
+研读 smaf_window.cpp RenderStatusArea 后照抄设计：
+- **10 列**：Ch|Stat|Note|Voice|PC|Inst|Vol|Pan|Event|Mode。
+- **分版本行组**：MA-2 = FM + ATR（ADPCM 音轨行，ATR0/1，parser 计数）；
+  MA-3 = FM + PCM（P0-7 ROM 鼓槽，ch9 鼓音符静态枚举）+ MWA；
+  MA-5 = FM + MWA（e#waveId / m#idx）。
+- **粘性缓存**（ma2play s_lastNote/s_lastAlg 同款）：不活跃保留上次
+  Note/Inst/Voice 灰色显示，不闪回 "--"；换曲清空。
+- **多复音 Note 列**：MA-5 同通道最多 3 音符 "C4+E4"。
+- **Voice 列**：PC(+bankL) → SysEx 注册表反查 FM/PCM。
+- **Mode 列**：MTR 通道状态 channel_type（NoCare/Melody/NoMel/Rhythm，
+  HPS 2 字节打包/其余每通道 1 字节，parser 新增解析）。
+- Inst：GM 全名；ch9 按当前音高显 GM 鼓名。
+- 实测 Sound_1(MA-5)：11 FM + 4 MWA(e1-e4) 行；Dot Beat(MA-2)：
+  chTypes 含 Rhythm。

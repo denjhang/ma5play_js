@@ -389,105 +389,125 @@ function updateUI() {
 }
 /* ---------------- 通道表（ma2play 通道可视化同款：Ch/Prog/Note/Vol/Pan/Exp/Event） ---------------- */
 const GM_NAMES = ['Acoustic Grand Piano','Bright Acoustic Piano','Electric Grand Piano','Honky-tonk Piano','Electric Piano 1','Electric Piano 2','Harpsichord','Clavinet','Celesta','Glockenspiel','Music Box','Vibraphone','Marimba','Xylophone','Tubular Bells','Dulcimer','Drawbar Organ','Percussive Organ','Rock Organ','Church Organ','Reed Organ','Accordion','Harmonica','Tango Accordion','Acoustic Guitar (nylon)','Acoustic Guitar (steel)','Electric Guitar (jazz)','Electric Guitar (clean)','Electric Guitar (muted)','Overdriven Guitar','Distortion Guitar','Guitar Harmonics','Acoustic Bass','Electric Bass (finger)','Electric Bass (pick)','Fretless Bass','Slap Bass 1','Slap Bass 2','Synth Bass 1','Synth Bass 2','Violin','Viola','Cello','Contrabass','Tremolo Strings','Pizzicato Strings','Orchestral Harp','Timpani','String Ensemble 1','String Ensemble 2','SynthStrings 1','SynthStrings 2','Choir Aahs','Voice Oohs','Synth Voice','Orchestra Hit','Trumpet','Trombone','Tuba','Muted Trumpet','French Horn','Brass Section','Synth Brass 1','Synth Brass 2','Soprano Sax','Alto Sax','Tenor Sax','Baritone Sax','Oboe','English Horn','Bassoon','Clarinet','Piccolo','Flute','Recorder','Pan Flute','Blown Bottle','Shakuhachi','Whistle','Ocarina','Lead 1 (square)','Lead 2 (sawtooth)','Lead 3 (calliope)','Lead 4 (chiff)','Lead 5 (charang)','Lead 6 (voice)','Lead 7 (fifths)','Lead 8 (bass + lead)','Pad 1 (new age)','Pad 2 (warm)','Pad 3 (polysynth)','Pad 4 (choir)','Pad 5 (bowed)','Pad 6 (metallic)','Pad 7 (halo)','Pad 8 (sweep)','FX 1 (rain)','FX 2 (soundtrack)','FX 3 (crystal)','FX 4 (atmosphere)','FX 5 (brightness)','FX 6 (goblins)','FX 7 (echoes)','FX 8 (sci-fi)','Sitar','Banjo','Shamisen','Koto','Kalimba','Bagpipe','Fiddle','Shanai','Tinkle Bell','Agogo','Steel Drums','Woodblock','Taiko Drum','Melodic Tom','Synth Drum','Reverse Cymbal','Guitar Fret Noise','Breath Noise','Seashore','Bird Tweet','Telephone Ring','Helicopter','Applause','Gunshot'];
-const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const GM_DRUMS = { 35:'Acoustic Bass Drum',36:'Bass Drum 1',37:'Side Stick',38:'Acoustic Snare',39:'Hand Clap',40:'Electric Snare',41:'Low Floor Tom',42:'Closed Hi-Hat',43:'High Floor Tom',44:'Pedal Hi-Hat',45:'Low Tom',46:'Open Hi-Hat',47:'Low-Mid Tom',48:'Hi-Mid Tom',49:'Crash Cymbal 1',50:'High Tom',51:'Ride Cymbal 1',52:'Chinese Cymbal',53:'Ride Bell',54:'Tambourine',55:'Splash Cymbal',56:'Cowbell',57:'Crash Cymbal 2',58:'Vibraslap',59:'Ride Cymbal 2',60:'Hi Bongo',61:'Low Bongo',62:'Mute Hi Conga',63:'Open Hi Conga',64:'Low Conga',65:'High Timbale',66:'Low Timbale',67:'High Agogo',68:'Low Agogo',69:'Cabasa',70:'Maracas',71:'Short Whistle',72:'Long Whistle',73:'Short Guiro',74:'Long Guiro',75:'Claves',76:'Hi Wood Block',77:'Low Wood Block',78:'Mute Cuica',79:'Open Cuica',80:'Mute Triangle',81:'Open Triangle' };
+const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const noteName = n => n >= 0 && n <= 127 ? NOTE_NAMES[n % 12] + ((n / 12 | 0) - 1) : '--';
-const chVis = { chans: [] };
+const CH_TYPE_NAMES = ['NoCare', 'Melody', 'NoMel', 'Rhythm'];
+const CH_NAMES_ROW = Array.from({ length: 16 }, (_, i) => 'Ch' + i);
+
+/* 通道表（ma2play RenderStatusArea 同款设计）：
+ * 10 列 Ch|Stat|Note|Voice|PC|Inst|Vol|Pan|Event|Mode；
+ * 分版本行组：MA-2 = FM+ATR；MA-3 = FM+PCM(ROM鼓)+MWA；MA-5 = FM+MWA。
+ * 原则：切曲全扫定型行集合；不活跃保留上次值（灰色粘性缓存）；
+ * Note 列 MA-5 多复音 "C4+E4"；Voice 列 FM/PCM（PC→SysEx 注册表反查）。 */
+const chVis = { chans: [], ma: 0 };
+const chCol = i => `rgb(${CH_COLORS[i % 16].join(',')})`;
 
 function buildChGrid() {
-  $('chTable').innerHTML = `<colgroup><col style="width:9%"><col style="width:34%"><col style="width:17%"><col style="width:8%"><col style="width:9%"><col style="width:8%"><col style="width:15%"></colgroup><thead><tr><th>Ch</th><th>Prog</th><th>Note</th><th>Vol</th><th>Pan</th><th>Exp</th><th>Event</th></tr></thead>`;
-  chVis.chans = Array.from({ length: 16 }, () => ({ ev: [], notes: [], ei: 0, pc: -1, vol: 100, pan: 64, exp: 127, last: '--', act: false, used: false, progShown: '' }));
+  $('chTable').innerHTML = `<colgroup><col style="width:8%"><col style="width:7%"><col style="width:15%"><col style="width:9%"><col style="width:6%"><col style="width:22%"><col style="width:6%"><col style="width:6%"><col style="width:11%"><col style="width:10%"></colgroup><thead><tr><th>Ch</th><th>Stat</th><th>Note</th><th>Voice</th><th>PC</th><th>Inst</th><th>Vol</th><th>Pan</th><th>Event</th><th>Mode</th></tr></thead>`;
+  chVis.chans = Array.from({ length: 16 }, () => ({ ev: [], notes: [], ei: 0, pc: -1, bankM: 0, bankL: 0, vol: 100, pan: 64, exp: 127, last: '--', used: false, act: false, lastNote: -1, lastVoice: '', lastInst: '' }));
 }
-function buildWaveRows(meta) {
-  let sec = document.getElementById('waveRows');
-  if (sec) sec.remove();
-  const voices = meta?.voices ?? [], waves = meta?.waves ?? [];
-  if (!voices.length && !waves.length) return;
-  const tb = $('chTable');
-  sec = document.createElement('tbody');
-  sec.id = 'waveRows';
-  const add = html => { const tr = document.createElement('tr'); tr.innerHTML = html; sec.appendChild(tr); };
-  if (voices.length) {
-    add(`<td colspan="7" style="color:var(--accent2);font-weight:600;padding-top:4px">Voices (SysEx registry, ${voices.length})</td>`);
-    voices.slice(0, 8).forEach((v, i) => {
-      add(`<td>V${i}</td><td class="prog">${v.kind}</td><td class="note">${v.vtype ?? '--'}</td><td>${v.bankM ?? v.bankL ?? '--'}/${v.pc ?? '--'}</td><td>${v.drum ?? '--'}</td><td>--</td><td class="evt">static</td>`);
-    });
-  }
-  if (waves.length) {
-    add(`<td colspan="7" style="color:var(--accent2);font-weight:600;padding-top:4px">PCM Waves (registry, ${waves.length})</td>`);
-    waves.slice(0, 8).forEach((w, i) => {
-      const kind = w.kind ?? (w.src === 'Mwa' ? (w.type === 1 ? 'Awa (stream)' : w.type === 2 ? 'Mwa stream' : w.type === 3 ? 'MSTR' : `Mwa t${w.type}`) : w.src);
-      add(`<td>W${i}</td><td class="prog">${kind}</td><td class="note">${w.id !== undefined ? '#' + w.id : 'M' + i}</td><td>${w.hz ? w.hz + 'Hz' : '--'}</td><td>${w.stereo ? 'st' : 'mo'}</td><td>--</td><td class="evt">${w.size ? (w.size / 1024).toFixed(1) + 'K' : '--'}</td>`);
-    });
-  }
-  if (voices.length + waves.length > 16)
-    add(`<td colspan="7" style="color:var(--dim)">… registry truncated (view log for full list)</td>`);
-  tb.appendChild(sec);
-}
+
 function chOnTrack(meta) {
-  // ma2play 原则：切曲时一次性全扫定型——通道集合、各通道首个乐器/状态
-  // 预解析；播放期间行数与乐器名（粘性）不再增删重置。
-  for (const c of chVis.chans) { c.ev = []; c.notes = []; c.ei = 0; c.pc = -1; c.vol = 100; c.pan = 64; c.exp = 127; c.last = '--'; c.note = -1; c.act = false; c.used = false; c.progShown = ''; }
+  chVis.ma = meta?.version ?? 0;
+  for (const c of chVis.chans) { c.ev = []; c.notes = []; c.ei = 0; c.pc = -1; c.bankM = 0; c.bankL = 0; c.vol = 100; c.pan = 64; c.exp = 127; c.last = '--'; c.used = false; c.act = false; c.lastNote = -1; c.lastVoice = ''; c.lastInst = ''; }
   for (const e of meta?.chEv ?? []) { const c = chVis.chans[e.ch]; if (c) { c.ev.push(e); c.used = true; } }
   for (const n of meta?.notes ?? []) { const c = chVis.chans[n.ch]; if (c) { c.notes.push(n); c.used = true; } }
   for (const c of chVis.chans) {
     c.ev.sort((a, b) => a.t - b.t); c.notes.sort((a, b) => a.t - b.t);
-    // 全扫：取首个 PC/CC 作为初始显示（粘性起点，不等时间轴到达）
-    for (const e of c.ev) { if (c.pc < 0 && e.k === 'PC') c.pc = e.pc; if (c.pc < 0) break; }
-    for (const e of c.ev) { if (e.k === 'CC') { if (e.cc === 7) { c.vol = e.v; break; } } }
+    for (const e of c.ev) { if (e.k === 'PC' && c.pc < 0) c.pc = e.pc; }
   }
-  // 只显示用到的通道（数量切曲时定型）
-  const tb = $('chTable');
-  tb.querySelectorAll('tbody:not(#waveRows)').forEach(b => b.remove());
-  const body = document.createElement('tbody');
-  chVis.chans.forEach((c, i) => {
-    if (!c.used) return;
-    const tr = document.createElement('tr');
-    tr.id = 'chrow' + i;
-    tr.className = 'chrow';
-    tr.style.borderLeft = `3px solid rgb(${CH_COLORS[i].join(',')})`;
-    tr.innerHTML = `<td>Ch${i}</td><td class="prog">—</td><td class="note">--</td><td class="vol">--</td><td class="pan">--</td><td class="exp">--</td><td class="evt">--</td>`;
-    body.appendChild(tr);
-  });
-  tb.appendChild(body);
-  buildWaveRows(meta);
-  // 日志摘要
+  rebuildChRows(meta);
   const nNotes = meta?.notes?.length ?? 0;
   const usedCh = chVis.chans.map((c, i) => c.used ? i : -1).filter(i => i >= 0);
   const last = meta?.notes?.length ? meta.notes.reduce((m2, n) => n.end > m2 ? n.end : m2, 0) : 0;
   log(`[vis] parsed: ${nNotes} notes, ch=[${usedCh.join(',')}], span 0→${last.toFixed(2)}s (dur ${(meta?.durationMs / 1000 || 0).toFixed(1)}s)`);
   if (meta?.voices?.length || meta?.waves?.length)
-    log(`[vis] registry: ${meta.voices?.length ?? 0} voices (${[...new Set(meta.voices?.map(v => v.kind) ?? [])].join('+')}), ${meta.waves?.length ?? 0} waves (${[...new Set(meta.waves?.map(w => w.kind) ?? [])].join('+')})`);
+    log(`[vis] registry: ${meta.voices?.length ?? 0} voices, ${meta.waves?.length ?? 0} waves, ATR=${meta.atrCount}`);
   if (!nNotes) log('[vis] ⚠ no notes parsed (compressed/SEQU format not supported for piano)');
 }
+
+/* 行集合只在切曲时重建：FM 行（用到通道）+ 分版本 ATR/PCM/MWA 行 */
+function rebuildChRows(meta) {
+  const tb = $('chTable');
+  tb.querySelectorAll('tbody').forEach(b => b.remove());
+  const body = document.createElement('tbody');
+  const addRow = (id, color, chTxt) => {
+    const tr = document.createElement('tr');
+    tr.className = 'chrow'; tr.id = id;
+    tr.style.borderLeftColor = color;
+    tr.innerHTML = `<td class="c">${chTxt}</td><td class="st">--</td><td class="note">--</td><td class="vc">--</td><td class="pc">--</td><td class="inst">--</td><td class="vol">--</td><td class="pan">--</td><td class="evt">--</td><td class="mode">--</td>`;
+    body.appendChild(tr);
+    return tr;
+  };
+  chVis.chans.forEach((c, i) => { if (c.used) addRow('chrow' + i, chCol(i), 'Ch' + i); });
+  for (let a = 0; a < Math.min(meta?.atrCount ?? 0, 2); a++) {           // MA-2: ATR 行
+    const tr = addRow('atrrow' + a, chCol(10), 'ATR' + a);
+    tr.children[3].textContent = 'adpcm';
+    tr.children[5].textContent = 'ADPCM Stream';
+    tr.children[9].textContent = 'Stream';
+  }
+  if (chVis.ma === 3) {                                                   // MA-3: PCM ROM 鼓行
+    const drums = [...new Set((meta?.notes ?? []).filter(n => n.ch === 9).map(n => n.note))].slice(0, 8);
+    drums.forEach((dn, i) => {
+      const tr = addRow('pcmrow' + i, chCol(9), 'P' + i);
+      tr.children[2].textContent = noteName(dn);
+      tr.children[3].textContent = 'rom';
+      tr.children[5].textContent = GM_DRUMS[dn] ?? 'ROM Drum';
+      tr.children[9].textContent = 'PCM';
+    });
+  }
+  (meta?.waves ?? []).slice(0, 8).forEach((w, i) => {                     // MA-3/5: MWA 行
+    const tr = addRow('mwarow' + i, chCol(5), w.id !== undefined ? 'e' + w.id : 'm' + i);
+    tr.children[3].textContent = (w.kind ?? 'wave').replace(' waveform', '').replace('MA-5 ', '').replace('MA-3 ', '');
+    tr.children[5].textContent = w.hz ? `wave ${w.hz}Hz` : 'ext waveform';
+    tr.children[8].textContent = w.size ? (w.size / 1024).toFixed(1) + 'K' : '--';
+    tr.children[9].textContent = 'MWA';
+  });
+  tb.appendChild(body);
+}
+
+/* SysEx 注册表反查：PC(+bankL) → FM/PCM */
+function voiceLookup(bankL, pc) {
+  const v = S.meta?.voices?.find(v => (v.pc ?? -1) === pc && (v.bankL ?? 0) === bankL && v.vtype);
+  return v ? v.vtype : '';
+}
+
 function updateChTable(tSec) {
   chVis.chans.forEach((c, i) => {
     if (!c.used) return;
     while (c.ei < c.ev.length && c.ev[c.ei].t <= tSec) {
       const e = c.ev[c.ei++];
       if (e.k === 'PC') c.pc = e.pc;
-      else if (e.k === 'CC') { if (e.cc === 7) c.vol = e.v; else if (e.cc === 10) c.pan = e.v; else if (e.cc === 11) c.exp = e.v; }
+      else if (e.k === 'CC') { if (e.cc === 7) c.vol = e.v; else if (e.cc === 10) c.pan = e.v; else if (e.cc === 11) c.exp = e.v; else if (e.cc === 0) c.bankM = e.v; else if (e.cc === 32) c.bankL = e.v; }
       if (e.k !== 'Note') c.last = e.k;
     }
-    let note = -1;
+    const held = [];                        // 多复音（最多 3，"C4+E4"）
     for (let j = 0; j < c.notes.length; j++) {
       const n = c.notes[j];
       if (n.t > tSec) break;
-      if (n.end > tSec) note = n.note;
+      if (n.end > tSec && !held.includes(n.note)) { held.push(n.note); if (held.length >= 3) break; }
     }
-    c.act = note >= 0;
+    c.act = held.length > 0;
+    if (c.act) c.lastNote = held[0];
     const tr = $('chrow' + i);
     if (!tr) return;
-    const tds = tr.children;
+    const t = tr.children;
     tr.classList.toggle('on', c.act);
-    // 乐器名粘性：一旦确定不再回退默认；仅在变化时写 DOM（布局稳定）
-    const progTxt = i === 9 ? 'Drums' : c.pc >= 0 ? `${c.pc} ${GM_NAMES[c.pc] ?? '?'}` : '—';
-    if (progTxt !== c.progShown) { c.progShown = progTxt; tds[1].textContent = progTxt; tds[1].title = progTxt; }
-    tds[2].textContent = note >= 0 ? (i === 9 ? (GM_DRUMS[note] ?? noteName(note)) : noteName(note)) : '--';
-    tds[3].textContent = c.vol;
-    tds[4].textContent = c.pan === 64 ? 'C' : (c.pan > 64 ? 'R' + (c.pan - 64) : 'L' + (64 - c.pan));
-    tds[5].textContent = c.exp;
-    tds[6].textContent = c.act ? 'Note' : c.last;
+    t[1].textContent = c.act ? 'ON' : '--';
+    const disp = c.act ? held : (c.lastNote >= 0 ? [c.lastNote] : []);
+    t[2].textContent = disp.length ? disp.map(n => i === 9 ? (GM_DRUMS[n] ?? noteName(n)) : noteName(n)).join('+') : '--';
+    if (!c.lastVoice && c.pc >= 0) c.lastVoice = voiceLookup(c.bankL, c.pc);
+    t[3].textContent = c.lastVoice || (i === 9 ? 'rom' : '--');
+    t[4].textContent = c.pc >= 0 ? c.pc : '--';
+    const inst = i === 9 ? (c.lastNote >= 0 ? (GM_DRUMS[c.lastNote] ?? 'Drums') : 'Drums')
+      : c.pc >= 0 ? (GM_NAMES[c.pc] ?? '?') : '';
+    if (inst && inst !== c.lastInst) { c.lastInst = inst; t[5].textContent = inst; t[5].title = inst; }
+    t[6].textContent = c.vol;
+    t[7].textContent = c.pan < 48 ? 'L' : c.pan > 80 ? 'R' : 'C';
+    t[8].textContent = c.act ? 'Note' : c.last;
+    const ct = S.meta?.chTypes?.[i];
+    t[9].textContent = ct >= 0 ? CH_TYPE_NAMES[ct] : '--';
   });
 }
 
@@ -670,6 +690,7 @@ window.addEventListener('resize', () => { if (!crumbEditing) renderCrumbs(); });
 
 /* ---------------- 启动 ---------------- */
 window.loadTrack = loadTrack;
+window.__updCh = t => { try { updateChTable(t); return "ok"; } catch (e) { return "ERR " + e.message; } };
 window.__updateUI = () => { try { updateUI(); return 'ok'; } catch (e) { return 'ERR ' + e.message; } };
 window.__dbg = () => ({
   q: S.queue.length, qFrames: S.qFrames, loaded: S.loaded, playing: S.playing, priming: S.priming, ended: S.ended,
