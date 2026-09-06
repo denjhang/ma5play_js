@@ -34,11 +34,18 @@
   voice→wave 精确链接在 DLL 内，注册序是 parser 级近似。
 - ✅ **解析器对齐 C++ 参考实现（1484/1484 全语料 bit 级一致）**：
   `ref/libymf825_{ma2,ma3,ma5}/` 为三版源码副本 + `ref/voice/` 资产 +
-  C++ 基准工具（count_events/dump_events/test_vis_slots，本地 g++ 构建），
-  是可视化解码的地面真值来源。五大修复见 5ff7b41：0x8X=NOTE（带
-  g_lastVelocity）、fmt=1 解压后分发 evMobile、MMMG 内 SEQU + 头字节时基、
-  evSequ 全分支重写 + rest-- 越界、evHps 短格式表。A/B 脚本模式：C++
-  count_events.exe 全语料跑一遍存 TSV，JS 对拍 notes/cc/pc/pb + 每通道数。
+  C++ 基准工具（count_events/dump_events/test_vis_slots + ma5 版 test_vis5，
+  本地 g++ 构建，从 ref/ 目录跑），是可视化解码的地面真值来源。
+  五大修复见 5ff7b41：0x8X=NOTE（带 g_lastVelocity）、fmt=1 解压后分发
+  evMobile、MMMG 内 SEQU + 头字节时基、evSequ 全分支重写 + rest-- 越界、
+  evHps 短格式表。A/B 脚本模式：C++ count_events.exe 全语料跑一遍存 TSV，
+  JS 对拍 notes/cc/pc/pb + 每通道数。
+- ✅ **noteOn 路由模型移植（bec00b2）**：routeNotes 静态预标记每音符
+  fm/drum/ext/stream；MA-3 与 MA-5 **同款 ROM 鼓 PCM**（bankMSB>=125，
+  用户裁定：ymf825 关 MA-5 鼓只是逆向未完成）；ext=bank124 通道命中
+  PCM 音色（C++ 只比 bankLSB+pc，voice 带 waveID：MA-5 长格式 d[25] 原始
+  16 字节 / MA-3 7bit vp[15]）；stream=MA-5 note<Mwa 条数（任意通道）。
+  MIDI 行只挂 FM 音符；P 行=鼓键；WAVE=e<waveID>/s<idx>/m<idx>。
 - ✅ 通道表粘滞铁律：单曲目内所有通道所有条目禁止复位——失活只撤高亮，
   Note/Event/Vol/Pan/Exp 保留最后值，切曲才整表重建。
 - ✅ 精细分阶段载入进度条：五阶段（下载核心 30%/编译 22%/下载预载 13%/
