@@ -28,7 +28,7 @@ body {
   backdrop-filter: blur(8px);
 }
 .brand { font-weight: 700; font-size: 16px; letter-spacing: .5px; }
-.brand .logo { color: var(--accent2); margin-right: 6px; }
+.brand .logo { height: 22px; width: 22px; margin-right: 8px; vertical-align: -5px; border-radius: 4px; }
 .brand .tag {
   font-size: 11px; font-weight: 600; color: var(--accent);
   border: 1px solid var(--accent); border-radius: 99px; padding: 1px 8px;
@@ -111,6 +111,11 @@ body {
 .crumbs .seg { color: var(--text); cursor: pointer; padding: 2px 4px; border-radius: 4px; }
 .crumbs .seg:hover { color: var(--accent); background: #ffffff10; }
 .crumbs .sep { color: #3d4763; }
+.crumbs .seg.ellipsis { color: var(--dim); font-weight: 700; }
+.crumbs .pathinput {
+  flex: 1; min-width: 60px; background: transparent; border: none; outline: none;
+  color: var(--accent); font: 12px system-ui; padding: 0;
+}
 .histrow { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 12px; }
 .histrow select {
   flex: 1; background: var(--panel2); color: var(--text); border: 1px solid var(--line);

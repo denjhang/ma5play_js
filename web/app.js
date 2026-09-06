@@ -352,17 +352,7 @@ function renderBrowser() {
   $('navBack').disabled = !browser.back.length;
   $('navFwd').disabled = !browser.fwd.length;
   $('navUp').disabled = !browser.parent;
-  const crumbs = $('crumbs'); crumbs.innerHTML = '';
-  const parts = browser.path.split(/[\\/]/).filter(Boolean);
-  let acc = '';
-  parts.forEach((seg, i) => {
-    acc = i === 0 ? (/[A-Za-z]:$/.test(seg) ? seg + '\\' : seg) : acc.replace(/[\\/]+$/, '') + '\\' + seg;
-    if (i) crumbs.insertAdjacentHTML('beforeend', '<span class="sep">›</span>');
-    const s = document.createElement('span');
-    s.className = 'seg'; s.textContent = seg; s.title = acc;
-    s.onclick = () => navigateTo(acc);
-    crumbs.appendChild(s);
-  });
+  renderCrumbs();
   const ul = $('fileList'); ul.innerHTML = '';
   for (const e of browser.entries) {
     const li = document.createElement('li');
@@ -384,6 +374,85 @@ async function playByPath(path) {
   const buf = await r.arrayBuffer();
   if (await loadTrack(path.split(/[\\/]/).pop(), buf, path)) markActiveFile();
 }
+/* 面包屑（照抄 ma2play：优先显示最内层目录，左侧溢出折叠成 "..."，
+ * 点 "..." 或空白处进入路径输入模式，Enter 导航 / Esc 取消） */
+let crumbEditing = false;
+function renderCrumbs() {
+  const crumbs = $('crumbs');
+  if (crumbEditing) return;
+  crumbs.innerHTML = '';
+  const parts = browser.path.split(/[\\/]/).filter(Boolean);
+  const accPath = i => {
+    let acc = '';
+    for (let j = 0; j <= i; j++) {
+      const seg = parts[j];
+      acc = j === 0 ? (/[A-Za-z]:$/.test(seg) ? seg + '\\' : seg) : acc.replace(/[\\/]+$/, '') + '\\' + seg;
+    }
+    return acc;
+  };
+  // 先全量渲染（不可见），从右往左保留能放下的段，左边折叠成 "..."
+  const frag = document.createDocumentFragment();
+  const segEls = [];
+  parts.forEach((seg, i) => {
+    if (i) { const sp = document.createElement('span'); sp.className = 'sep'; sp.textContent = '›'; frag.appendChild(sp); }
+    const s = document.createElement('span');
+    s.className = 'seg'; s.textContent = seg; s.title = accPath(i);
+    s.onclick = () => navigateTo(accPath(i));
+    frag.appendChild(s); segEls.push(s);
+  });
+  crumbs.appendChild(frag);
+  const ellipsis = document.createElement('span');
+  ellipsis.className = 'seg ellipsis'; ellipsis.textContent = '...'; ellipsis.title = '输入完整路径';
+  ellipsis.onclick = enterPathEdit;
+  // 测宽：从右累计，超出可用宽度即截（ma2play firstVisibleSegment 同算法）
+  const sepW = 16, avail = crumbs.clientWidth - 24;
+  let used = 0, first = segEls.length - 1;
+  for (let i = segEls.length - 1; i >= 0; i--) {
+    const w = segEls[i].offsetWidth + (i < segEls.length - 1 ? sepW : 0);
+    const needEll = i > 0 ? 34 : 0;
+    if (used + w + needEll > avail) break;
+    used += w; first = i;
+  }
+  if (first > 0) {
+    // 隐藏 first 之前的段及其分隔符，左侧以 "..." 折叠
+    segEls.forEach((el, i) => {
+      if (i >= first) return;
+      el.style.display = 'none';
+      const sep = el.previousSibling;         // 段前的 ›
+      if (sep?.classList?.contains('sep')) sep.style.display = 'none';
+    });
+    crumbs.insertBefore(ellipsis, crumbs.firstChild);
+    const sp = document.createElement('span'); sp.className = 'sep'; sp.textContent = '›';
+    crumbs.insertBefore(sp, crumbs.children[1] || null);
+  }
+  // 空白处点击 → 输入模式
+  crumbs.onclick = e => { if (e.target === crumbs) enterPathEdit(); };
+}
+function enterPathEdit() {
+  if (crumbEditing) return;
+  crumbEditing = true;
+  const crumbs = $('crumbs');
+  crumbs.innerHTML = '';
+  const inp = document.createElement('input');
+  inp.className = 'pathinput';
+  inp.value = browser.path;
+  crumbs.appendChild(inp);
+  inp.focus();
+  inp.select();
+  const done = ok => {
+    crumbEditing = false;
+    if (ok && inp.value.trim()) navigateTo(inp.value.trim());
+    else renderCrumbs();
+  };
+  inp.onkeydown = e => {
+    if (e.key === 'Enter') done(true);
+    else if (e.key === 'Escape') done(false);
+    e.stopPropagation();
+  };
+  inp.onblur = () => done(false);
+  crumbs.onclick = null;
+}
+
 function markActiveFile() {
   document.querySelectorAll('#fileList li').forEach(li =>
     li.classList.toggle('active', li.dataset.path === S.curPath));
@@ -421,6 +490,7 @@ $('navBack').onclick = () => { if (browser.back.length) { browser.fwd.push(brows
 $('navFwd').onclick = () => { if (browser.fwd.length) { browser.back.push(browser.path); navigateTo(browser.fwd.pop(), false); } };
 $('navUp').onclick = () => browser.parent && navigateTo(browser.parent);
 $('folderHist').onchange = e => { if (e.target.value) { navigateTo(e.target.value); e.target.value = ''; } };
+window.addEventListener('resize', () => { if (!crumbEditing) renderCrumbs(); });
 
 /* ---------------- 启动 ---------------- */
 window.loadTrack = loadTrack;

@@ -137,3 +137,10 @@ smaf_window.cpp Render() 确认真实布局并复刻：
   上一回调没消费完的半块下一回调**从头重播** → 内容重复 = 细微卡顿 +
   乐曲推进变慢。修复 = S.blkOff 跨回调持久保存块内偏移。
 - 验证：播放帧数/墙钟 = 1.006（修复前该比值虚高、内容落后）。
+
+### 面包屑细节 + 图标（用户对照 ma2play 指出）
+- 右优先：从右往左保留能放下的段（firstVisibleSegment 同算法），前导段
+  折叠成 "..."——深层路径始终看得见当前目录；窗口 resize 重算。
+- 点击 "..." 或面包屑空白处 → 路径输入模式（Enter 导航 / Esc 取消），
+  同 ma2play s_pathEditMode。
+- logo/favicon = ma2play app_icon.ico（ICO 内嵌 PNG，取 256px，prepare.sh 再生）。
