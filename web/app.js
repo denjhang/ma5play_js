@@ -101,10 +101,12 @@ function ensureAudio() {
   procNode.onaudioprocess = ev => {
     const L = ev.outputBuffer.getChannelData(0), R = ev.outputBuffer.getChannelData(1);
     S.spCalls = (S.spCalls || 0) + 1;
-    let fed = 0, blk = S.queue[0], bi = 0;
+    let fed = 0;
+    let blk = S.queue[0];
+    let bi = S.blkOff || 0;                    // 跨回调持久：半块不重播
     for (let i = 0; i < L.length; i++) {
       if (!blk) break;
-      const l = blk.i16[(bi) * 2], r = blk.i16[(bi) * 2 + 1];
+      const l = blk.i16[bi * 2], r = blk.i16[bi * 2 + 1];
       L[i] = l / 32768; R[i] = r / 32768;
       bi++; fed++;
       if (bi >= blk.frames) {
@@ -113,6 +115,7 @@ function ensureAudio() {
         blk = S.queue[0]; bi = 0;
       }
     }
+    S.blkOff = blk ? bi : 0;
     S.spFed = (S.spFed || 0) + fed;
     if (fed) S.playedFrames += fed;
     else if (!S.priming && S.playing && !S.ended) {  // 欠载：静一拍回预滚
@@ -163,7 +166,7 @@ async function loadTrack(name, buf, path) {
     S.playing = false; S.loaded = false; S.ended = false;
     S.name = name; S.curPath = path ?? null; S.size = buf.byteLength;
     S.playedFrames = 0;
-    S.queue = []; S.qFrames = 0;
+    S.queue = []; S.qFrames = 0; S.blkOff = 0;
     S.meta = parseMMF(buf);
     piano.onTrack(S.meta);
     ensureAudio();

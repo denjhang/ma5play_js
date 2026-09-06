@@ -130,3 +130,10 @@ smaf_window.cpp Render() 确认真实布局并复刻：
 - 播放/停止/循环/音量全部并入文件浏览器上方传输条（ma2play SMAF Player
   header 同位置）；侧栏只剩 File Info（File/Title/Version/Size/Length/
   Notes/Backend）+ 本机文件打开。
+
+### 卡顿+变慢根因（用户报"细微卡顿和播放速度变慢"）
+- 渲染速度无罪：node 实测 MA-2 Dot Beat 4.23x、MA-5 Melody01 2.80x realtime。
+- 真凶 = 消费端半块重播 bug：onaudioprocess 每次回调把 bi 从 0 数起，
+  上一回调没消费完的半块下一回调**从头重播** → 内容重复 = 细微卡顿 +
+  乐曲推进变慢。修复 = S.blkOff 跨回调持久保存块内偏移。
+- 验证：播放帧数/墙钟 = 1.006（修复前该比值虚高、内容落后）。
