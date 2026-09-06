@@ -125,12 +125,20 @@ function evHps(u8, p, rest, octShift) {
       case 7: return [{ type: 'cc', ch, cc: 7, v }, p, rest];
       case 10: return [{ type: 'cc', ch, cc: 10, v }, p, rest];
       case 11: return [{ type: 'cc', ch, cc: 11, v }, p, rest];
-      case 1: return [{ type: 'cc', ch, cc: 0, v }, p, rest];     // bank
+      case 1: return [{ type: 'cc', ch, cc: 32, v }, p, rest];    // bank LSB（C++ 同）
+      case 3: return [{ type: 'cc', ch, cc: 1, v }, p, rest];     // modulation
       default: return [{ type: 'nop' }, p, rest];
     }
   }
-  return [{ type: 'nop' }, p, rest];
+  // type2 0/1/2 短格式（smaf825 表，C++ shortModTable/shortExpTable 同值）
+  if (type2 === 2) return [{ type: 'cc', ch, cc: 1, v: SHORT_MOD[sig & 15] }, p, rest];
+  if (type2 === 1) return [{ type: 'bend', ch }, p, rest];
+  return [{ type: 'cc', ch, cc: 11, v: SHORT_EXP[sig & 15] }, p, rest];
 }
+/* Mobile 事件（fmt 2/1/3）。0x8X Note-Off 与 C++ 参考一致：也是 NOTE 事件
+ * （velocity 取该通道上一个 0x9X 的 g_lastVelocity，note+gate 照读）——
+ * sekai ni hana 一曲 ch9 鼓大量用 0x89 编码，按 nop 丢弃会丢 ~80% 音符。 */
+const g_lastVel = new Array(32).fill(127);
 function evMobile(u8, p, rest, fmt32) {
   if (rest <= 0) return [null, p, rest];
   let sig = u8[p]; p++; rest--;
@@ -140,14 +148,15 @@ function evMobile(u8, p, rest, fmt32) {
     if (rest < 2) return [null, p, rest];
     const note = u8[p]; p++; rest--;
     const vel = u8[p]; p++; rest--;
+    g_lastVel[ch] = vel;
     let gate; [gate, p, rest] = varint(u8, p, rest, true);
     return [{ type: 'note', ch, note, vel, gate }, p, rest];
   }
   if (status === 0x80) {
     if (rest < 1) return [null, p, rest];
-    p++; rest--;
+    const note = u8[p]; p++; rest--;
     let gate; [gate, p, rest] = varint(u8, p, rest, true);
-    return [{ type: 'nop' }, p, rest];
+    return [{ type: 'note', ch, note, vel: g_lastVel[ch], gate, off: true }, p, rest];
   }
   if (status === 0xB0) {
     if (rest < 2) return [null, p, rest];
@@ -170,21 +179,25 @@ function evSequ(u8, p, rest, octShift) {
     if (rest < 1) return [null, p, rest];
     const s2 = u8[p]; p++; rest--;
     const ch = s2 >> 6, msg = s2 & 0x3F;
-    if (msg === 0x00 || msg === 0x30 || msg === 0x31) {           // fine/PC/bank 带 1 参
-      if (rest >= 1) { p++; rest--; }
-      return [{ type: 'nop' }, p, rest];
-    }
-    if (msg === 0x32) {                                           // 八度移位
-      if (rest < 1) return [null, p, rest];
-      let v = u8[p]; p++; rest--;
-      if (v >= 0x80) v = 0x80 - v;
-      return [{ type: 'oct', ch, v }, p, rest];
-    }
+    const take1 = () => { if (rest < 1) return [null, p, rest]; const v = u8[p]; p++; rest--; return v; };
+    if (msg === 0x00) return [take1() === null ? null : { type: 'nop' }, p, rest];          // fine tune（1 参）
+    if (msg >= 0x01 && msg <= 0x0E) return [{ type: 'cc', ch, cc: 11, v: SHORT_EXP[msg] }, p, rest];
+    if (msg >= 0x11 && msg <= 0x1E) return [{ type: 'bend', ch }, p, rest];
+    if (msg >= 0x21 && msg <= 0x2E) return [{ type: 'cc', ch, cc: 1, v: SHORT_MOD[msg - 0x20] }, p, rest];
+    if (msg === 0x30) { const v = take1(); return v === null ? [null, p, rest] : [{ type: 'pc', ch, pc: v }, p, rest]; }
+    if (msg === 0x31) { const v = take1(); return v === null ? [null, p, rest] : [{ type: 'cc', ch, cc: 32, v }, p, rest]; }
+    if (msg === 0x32) { const v = take1(); if (v === null) return [null, p, rest]; let o = v; if (o >= 0x80) o = 0x80 - o; return [{ type: 'oct', ch, v: o }, p, rest]; }
+    if (msg === 0x33) { const v = take1(); return v === null ? [null, p, rest] : [{ type: 'cc', ch, cc: 1, v }, p, rest]; }
+    if (msg === 0x34) { const v = take1(); return v === null ? [null, p, rest] : [{ type: 'bend', ch }, p, rest]; }
+    if (msg === 0x36) { const v = take1(); return v === null ? [null, p, rest] : [{ type: 'cc', ch, cc: 11, v }, p, rest]; }
+    if (msg === 0x37) { const v = take1(); return v === null ? [null, p, rest] : [{ type: 'cc', ch, cc: 7, v }, p, rest]; }
+    if (msg === 0x3A) { const v = take1(); return v === null ? [null, p, rest] : [{ type: 'cc', ch, cc: 10, v }, p, rest]; }
+    if (msg === 0x3B) { const v = take1(); return v === null ? [null, p, rest] : [{ type: 'cc', ch, cc: 11, v }, p, rest]; }
     return [{ type: 'nop' }, p, rest];
   }
   if (sig === 0xFF) {
     if (rest >= 1 && u8[p] === 0x00) { p++; rest--; return [{ type: 'nop' }, p, rest]; }
-    if (rest >= 1 && u8[p] === 0xF0) { p++; const [d, np, nr] = readExclusive(u8, p, rest); return [d ? { type: 'excl', data: d } : null, np, nr]; }
+    if (rest >= 1 && u8[p] === 0xF0) { p++; rest--; const [d, np, nr] = readExclusive(u8, p, rest); return [d ? { type: 'excl', data: d } : null, np, nr]; }
     return [null, p, rest];
   }
   const ch = sig >> 6, oct = (sig >> 4) & 3, nv = sig & 15;       // 音符（同 HPS）
@@ -205,14 +218,13 @@ function parseSequence(u8, off, size, fmt, chBase, out) {
   const allow3 = fmt === 2 || fmt === 1;
   let t = 0;
   while (rest > 0) {
-    if (rest === 4 && !u32eq0(src, p)) break;   // 4 字节全零 EOS
-    if (rest === 4 && u32eq0(src, p)) break;
+    if (rest === 4 && u32eq0(src, p)) break;    // 4 字节全零 = EOS（非零则继续，同 C++）
     let d;
     [d, p, rest] = varint(src, p, rest, allow3);
     t += d * durTb;
     let ev;
     if (fmt === 0) [ev, p, rest] = evHps(src, p, rest, octShift);
-    else if (fmt === 2) [ev, p, rest] = evMobile(src, p, rest, false);
+    else if (fmt === 2 || fmt === 1) [ev, p, rest] = evMobile(src, p, rest, false);
     else if (fmt === 3) [ev, p, rest] = evMobile(src, p, rest, true);
     else if (fmt === -1) [ev, p, rest] = evSequ(src, p, rest, octShift);
     else break;
@@ -383,8 +395,9 @@ export function parseMMF(buf) {
       out1.durTb = out1.gateTb = 1;
       parseSequence(u8, p, csz, -1, 0, out1);
       trackIdx++;
-    } else if (sig === SIG.MMMG) {              // MMMG：2 字节 enigma 后为子块
+    } else if (sig === SIG.MMMG) {              // MMMG：2 字节头（seqHeader, 字面 ms 时基）后为子块
       let q = p + 2;
+      let mmmgTb = (u8[p + 1] > 0 && u8[p + 1] <= 250) ? u8[p + 1] : 20;  // ReMEXA 默认 20ms
       const me = p + csz;
       while (q + 8 <= me) {
         const msig = u32(u8, q), mcsz = u32(u8, q + 4);
@@ -393,6 +406,11 @@ export function parseMMF(buf) {
         if ((msig & 0xFFFFFF00) === SIG.MTR) {
           const fmt = u8[q];
           parseTrack(u8, q, mcsz, fmt === 0 ? trackIdx * 4 : 0, out1);
+          trackIdx++;
+        } else if (msig === SIG.SEQU) {          // MMMG 内 SEQU（Beep 类系统音，字面 ms 时基）
+          out1.tracks.push({ format: -1, seqType: 0 });
+          out1.durTb = out1.gateTb = mmmgTb;
+          parseSequence(u8, q, mcsz, -1, 0, out1);
           trackIdx++;
         } else if (msig === SIG.EXVO) {
           let len; [len] = varint(u8, q, mcsz, true);

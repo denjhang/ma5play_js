@@ -1,0 +1,80 @@
+In file included from src/smaf_sequencer.h:5,
+                 from ymf825_api.cpp:14:
+src/mmf_parser.h:172:16: warning: anonymous non-C-compatible type given name for linkage purposes by 'typedef' declaration [-Wnon-c-typedef-for-linkage]
+  172 | typedef struct {
+      |                ^
+      |                MmfFile
+src/mmf_parser.h:202:13: note: type is not C-compatible because 'MmfFile::MwaEntry::stereo' has default member initializer
+  202 |         int stereo = 0;           // waveType bit7: 1=Stereo (L/R nibble interleaved)
+      |             ^~~~~~
+ymf825_api.cpp:43:15: warning: 'ymfma3_ctx_t* ymfma3_init(int, double)' redeclared without dllimport attribute: previous dllimport ignored [-Wattributes]
+   43 | ymfma3_ctx_t *ymfma3_init(int sample_rate, double level_db) {
+      |               ^~~~~~~~~~~
+ymf825_api.cpp:52:5: warning: 'int ymfma3_load_voice_bank(ymfma3_ctx_t*, const char*)' redeclared without dllimport attribute: previous dllimport ignored [-Wattributes]
+   52 | int ymfma3_load_voice_bank(ymfma3_ctx_t *ctx, const char *voice_dir) {
+      |     ^~~~~~~~~~~~~~~~~~~~~~
+ymf825_api.cpp:75:5: warning: 'int ymfma3_load(ymfma3_ctx_t*, const void*, int)' redeclared without dllimport attribute: previous dllimport ignored [-Wattributes]
+   75 | int ymfma3_load(ymfma3_ctx_t *ctx, const void *mmf_data, int mmf_size) {
+      |     ^~~~~~~~~~~
+ymf825_api.cpp:125:6: warning: 'void ymfma3_set_loop_count(ymfma3_ctx_t*, int)' redeclared without dllimport attribute: previous dllimport ignored [-Wattributes]
+  125 | void ymfma3_set_loop_count(ymfma3_ctx_t *ctx, int loops) {
+      |      ^~~~~~~~~~~~~~~~~~~~~
+ymf825_api.cpp:136:6: warning: 'void ymfma3_start(ymfma3_ctx_t*)' redeclared without dllimport attribute: previous dllimport ignored [-Wattributes]
+  136 | void ymfma3_start(ymfma3_ctx_t *ctx) {
+      |      ^~~~~~~~~~~~
+ymf825_api.cpp:144:6: warning: 'void ymfma3_set_fm_engine(int)' redeclared without dllimport attribute: previous dllimport ignored [-Wattributes]
+  144 | void ymfma3_set_fm_engine(int engine) { g_fmEngine = (engine == 1) ? 1 : 0; }
+      |      ^~~~~~~~~~~~~~~~~~~~
+ymf825_api.cpp:145:6: warning: 'int ymfma3_get_fm_engine()' redeclared without dllimport attribute: previous dllimport ignored [-Wattributes]
+  145 | int  ymfma3_get_fm_engine(void) { return g_fmEngine; }
+      |      ^~~~~~~~~~~~~~~~~~~~
+ymf825_api.cpp:147:5: warning: 'int ymfma3_seek(ymfma3_ctx_t*, int)' redeclared without dllimport attribute: previous dllimport ignored [-Wattributes]
+  147 | int ymfma3_seek(ymfma3_ctx_t *ctx, int pos_ms) {
+      |     ^~~~~~~~~~~
+ymf825_api.cpp:158:5: warning: 'int ymfma3_pump(ymfma3_ctx_t*, int16_t*, int)' redeclared without dllimport attribute: previous dllimport ignored [-Wattributes]
+  158 | int ymfma3_pump(ymfma3_ctx_t *ctx, int16_t *out_interleaved, int max_frames) {
+      |     ^~~~~~~~~~~
+ymf825_api.cpp:182:5: warning: 'int ymfma3_get_position_ms(ymfma3_ctx_t*)' redeclared without dllimport attribute: previous dllimport ignored [-Wattributes]
+  182 | int ymfma3_get_position_ms(ymfma3_ctx_t *ctx) {
+      |     ^~~~~~~~~~~~~~~~~~~~~~
+ymf825_api.cpp:187:5: warning: 'int ymfma3_get_length_ms(ymfma3_ctx_t*)' redeclared without dllimport attribute: previous dllimport ignored [-Wattributes]
+  187 | int ymfma3_get_length_ms(ymfma3_ctx_t *ctx) {
+      |     ^~~~~~~~~~~~~~~~~~~~
+ymf825_api.cpp:192:6: warning: 'void ymfma3_free(ymfma3_ctx_t*)' redeclared without dllimport attribute: previous dllimport ignored [-Wattributes]
+  192 | void ymfma3_free(ymfma3_ctx_t *ctx) {
+      |      ^~~~~~~~~~~
+ymf825_api.cpp:196:6: warning: 'void ymfma3_set_volumes(ymfma3_ctx_t*, double, double)' redeclared without dllimport attribute: previous dllimport ignored [-Wattributes]
+  196 | void ymfma3_set_volumes(ymfma3_ctx_t *ctx, double fm_vol, double pcm_vol) {
+      |      ^~~~~~~~~~~~~~~~~~
+ymf825_api.cpp:224:6: warning: 'void ymfma3_get_channel_states(ymfma3_ctx_t*, ymfma3_channel_state_t*, int)' redeclared without dllimport attribute: previous dllimport ignored [-Wattributes]
+  224 | void ymfma3_get_channel_states(ymfma3_ctx_t *ctx, ymfma3_channel_state_t *out, int count) {
+      |      ^~~~~~~~~~~~~~~~~~~~~~~~~
+ymf825_api.cpp:251:6: warning: 'void ymfma3_get_midich_states(ymfma3_ctx_t*, ymfma3_midich_state_t*, int)' redeclared without dllimport attribute: previous dllimport ignored [-Wattributes]
+  251 | void ymfma3_get_midich_states(ymfma3_ctx_t *ctx, ymfma3_midich_state_t *out, int count) {
+      |      ^~~~~~~~~~~~~~~~~~~~~~~~
+ymf825_api.cpp:286:6: warning: 'void ymfma3_get_pcm_states(ymfma3_ctx_t*, ymfma3_pcm_state_t*, int)' redeclared without dllimport attribute: previous dllimport ignored [-Wattributes]
+  286 | void ymfma3_get_pcm_states(ymfma3_ctx_t *ctx, ymfma3_pcm_state_t *out, int count) {
+      |      ^~~~~~~~~~~~~~~~~~~~~
+ymf825_api.cpp:320:5: warning: 'int ymfma3_get_wave_states(ymfma3_ctx_t*, ymfma3_wave_state_t*, int)' redeclared without dllimport attribute: previous dllimport ignored [-Wattributes]
+  320 | int ymfma3_get_wave_states(ymfma3_ctx_t *ctx, ymfma3_wave_state_t *out, int max_count) {
+      |     ^~~~~~~~~~~~~~~~~~~~~~
+ymf825_api.cpp:352:5: warning: 'int ymfma3_get_mwa_slots(ymfma3_ctx_t*, ymfma3_mwa_slot_t*, int)' redeclared without dllimport attribute: previous dllimport ignored [-Wattributes]
+  352 | int ymfma3_get_mwa_slots(ymfma3_ctx_t *ctx, ymfma3_mwa_slot_t *out, int max_count) {
+      |     ^~~~~~~~~~~~~~~~~~~~
+In file included from src/mmf_parser.cpp:6:
+src/mmf_parser.h:172:16: warning: anonymous non-C-compatible type given name for linkage purposes by 'typedef' declaration [-Wnon-c-typedef-for-linkage]
+  172 | typedef struct {
+      |                ^
+      |                MmfFile
+src/mmf_parser.h:202:13: note: type is not C-compatible because 'MmfFile::MwaEntry::stereo' has default member initializer
+  202 |         int stereo = 0;           // waveType bit7: 1=Stereo (L/R nibble interleaved)
+      |             ^~~~~~
+In file included from src/smaf_sequencer.h:5,
+                 from src/smaf_sequencer.cpp:1:
+src/mmf_parser.h:172:16: warning: anonymous non-C-compatible type given name for linkage purposes by 'typedef' declaration [-Wnon-c-typedef-for-linkage]
+  172 | typedef struct {
+      |                ^
+      |                MmfFile
+src/mmf_parser.h:202:13: note: type is not C-compatible because 'MmfFile::MwaEntry::stereo' has default member initializer
+  202 |         int stereo = 0;           // waveType bit7: 1=Stereo (L/R nibble interleaved)
+      |             ^~~~~~

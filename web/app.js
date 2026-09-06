@@ -492,6 +492,13 @@ function buildNonMidiRows(body, meta, addGroup) {
     if (!chVis.drumKeys.has(k)) chVis.drumKeys.set(k, new Set());
     if (v.drum != null) chVis.drumKeys.get(k).add(v.drum);
   }
+  // 通道最终 bank/pc 映射（MA-5 鼓行枚举 + mwa 兜底判定共用）
+  chVis.chBankFinal = {};
+  for (const e of meta?.chEv ?? []) {
+    if (e.k === 'PC') (chVis.chBankFinal[e.ch] ??= {}).pc = e.pc;
+    else if (e.k === 'CC' && e.cc === 0) (chVis.chBankFinal[e.ch] ??= {}).bankM = e.v;
+    else if (e.k === 'CC' && e.cc === 32) (chVis.chBankFinal[e.ch] ??= {}).bankL = e.v;
+  }
   const addRow = (id, label, color, cells, desc) => {
     const tr = document.createElement('tr');
     tr.id = 'xrow-' + id;
@@ -520,14 +527,8 @@ function buildNonMidiRows(body, meta, addGroup) {
     if (ma === 3) {
       drums = [...new Set((meta?.notes ?? []).filter(n => n.ch === 9).map(n => n.note))];
     } else {
-      const bank = {};
-      for (const e of meta?.chEv ?? []) {
-        if (e.k === 'PC') (bank[e.ch] ??= {}).pc = e.pc;
-        else if (e.k === 'CC' && e.cc === 0) (bank[e.ch] ??= {}).bankM = e.v;
-        else if (e.k === 'CC' && e.cc === 32) (bank[e.ch] ??= {}).bankL = e.v;
-      }
       drums = (meta?.notes ?? []).filter(n => {
-        const b = bank[n.ch];
+        const b = chVis.chBankFinal[n.ch];
         return b?.bankM === 125 && chVis.drumKeys?.get((b.bankL ?? 0) + ':' + b.pc)?.has(n.note);
       }).map(n => n.note);
       drums = [...new Set(drums)];
@@ -559,6 +560,10 @@ function buildNonMidiRows(body, meta, addGroup) {
   chVis.pcmVoices = new Map();
   (meta?.voices ?? []).filter(v => v.vtype && v.vtype !== 'FM' && v.pc !== undefined)
     .forEach((v, i) => { const k = (v.bankL ?? 0) + ':' + v.pc; if (!chVis.pcmVoices.has(k)) chVis.pcmVoices.set(k, i); });
+  // mwa 兜底：全曲无 bankM=125 流音符（触发在 setup SysEx / DLL 内，纯音频/背景垫类，
+  // 语料 79 个文件）→ 播放期常亮，保证不死行
+  chVis.mwaFallback = (meta?.waves ?? []).some(w => w.src === 'Mwa') &&
+    !(meta?.notes ?? []).some(n => chVis.chBankFinal[n.ch]?.bankM === 125);
 }
 
 function updateChTable(tSec) {
@@ -632,7 +637,7 @@ function updateExtraRows(tSec, activeNotes) {
       act = drumHits.has(x.noteNum) || drumNotes.has(x.noteNum);
       if (act) { noteTxt = noteName(x.noteNum); evt = 'hit'; }
     } else if (x.kind === 'wave') {
-      if (x.src === 'mwa' && mwaAct) { act = true; noteTxt = 'stream'; evt = 'mwa'; }
+      if (x.src === 'mwa' && (mwaAct || (chVis.mwaFallback && S.playing))) { act = true; noteTxt = 'stream'; evt = 'mwa'; }
       else if (x.src === 'ext') {
         const n = extAct.get(x.extIdx);
         if (n !== undefined) { act = true; noteTxt = noteName(n); evt = 'wave'; }

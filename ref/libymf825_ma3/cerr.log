@@ -1,0 +1,16 @@
+In file included from count_events.cpp:6:
+src/mmf_parser.h:172:16: warning: anonymous non-C-compatible type given name for linkage purposes by 'typedef' declaration [-Wnon-c-typedef-for-linkage]
+  172 | typedef struct {
+      |                ^
+      |                MmfFile
+src/mmf_parser.h:202:13: note: type is not C-compatible because 'MmfFile::MwaEntry::stereo' has default member initializer
+  202 |         int stereo = 0;           // waveType bit7: 1=Stereo (L/R nibble interleaved)
+      |             ^~~~~~
+In file included from src/mmf_parser.cpp:6:
+src/mmf_parser.h:172:16: warning: anonymous non-C-compatible type given name for linkage purposes by 'typedef' declaration [-Wnon-c-typedef-for-linkage]
+  172 | typedef struct {
+      |                ^
+      |                MmfFile
+src/mmf_parser.h:202:13: note: type is not C-compatible because 'MmfFile::MwaEntry::stereo' has default member initializer
+  202 |         int stereo = 0;           // waveType bit7: 1=Stereo (L/R nibble interleaved)
+      |             ^~~~~~
