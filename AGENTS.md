@@ -14,7 +14,7 @@
 - 工具链用 msys2 pacman 的 emscripten，不用 emsdk。
 - **界面默认英文**（面向 YouTube 国际用户）；代码注释中文。
 
-## 当前状态（2026-09-06 深夜）
+## 当前状态（2026-09-06 v0.1.0 发布）
 
 - ✅ 工具链 / 构建 / node 冒烟（compact 核心全曲渲染）
 - ✅ web 播放器：ma2play 布局（左 File Info | 右上 钢琴 | 右下 文件浏览器+Log）
@@ -186,3 +186,11 @@ node switch_test.mjs                # 连播四曲
 9. **UI 设计照抄 ma2play**（smaf_window.cpp 是唯一权威）；改表/钢琴前先读
    对应 Render 函数全码，禁止自创设计（SysEx 注册表显示、10 列表、竖条纹
    琴键均被驳回）。服务器只绑 127.0.0.1。
+
+## 发布（v0.1.0，e36ad0b / tag v0.1.0）
+
+- `package.sh` → `dist/ma5play-<ver>-web.tar.gz`（web 运行时 + 构建产物 +
+  README/LICENSE + MANIFEST/SHA256SUMS；独立目录起服验证通过）。
+- README 已重写为开源项目形态（英文，特性/Quick start/架构/验证/Roadmap）。
+- LICENSE = MIT + 第三方说明（Yamaha DLL 仿真/资产按原条款，ref/ 为参考副本）。
+- 发布流程：构建(-O1) → prepare.sh → package.sh [ver] → git tag。
