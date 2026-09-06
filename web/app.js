@@ -303,6 +303,11 @@ const piano = (() => {
       if (lv <= 0.02) continue;
       const prev = active.get(nt.note);
       if (!prev || lv > prev.lv) active.set(nt.note, { lv, ch: nt.ch });
+      // 首个点亮日志：与静态解析摘要对比（t 应吻合 notes[0].t ± 延迟）
+      if (!draw.litLogged && nt.end >= t) {
+        draw.litLogged = true;
+        log(`[vis] piano first key lit @ t=${t.toFixed(2)}s note=${noteName(nt.note)} ch=${nt.ch}`);
+      }
     }
     const { wkW, wkH, rowRanges } = layout;
     const bkW = wkW * 0.65, bkH = wkH * 0.62;
@@ -350,7 +355,7 @@ const piano = (() => {
     if (S.loaded && (draw.chT = (draw.chT || 0) + 1) % 3 === 0) updateChTable(t);
   }
   requestAnimationFrame(draw);
-  return { onTrack(meta) { notes = (meta?.notes ?? []).slice().sort((a, b) => a.t - b.t); cursor = 0; } };
+  return { onTrack(meta) { notes = (meta?.notes ?? []).slice().sort((a, b) => a.t - b.t); cursor = 0; draw.litLogged = false; } };
 })();
 
 /* ---------------- UI ---------------- */
@@ -381,6 +386,12 @@ function buildChGrid() {
   chVis.chans = Array.from({ length: 16 }, () => ({ ev: [], ei: 0, notes: [], ni: 0, pc: -1, vol: 100, pan: 64, exp: 127, last: '--', note: -1, act: false }));
 }
 function chOnTrack(meta) {
+  // 载入即出解析摘要日志（静态对照用，带曲目时间标记）
+  const nNotes = meta?.notes?.length ?? 0;
+  const usedCh = [...new Set((meta?.notes ?? []).map(n => n.ch))].sort((a, b) => a - b);
+  const last = meta?.notes?.length ? meta.notes.reduce((m2, n) => n.end > m2 ? n.end : m2, 0) : 0;
+  log(`[vis] parsed: ${nNotes} notes, ch=[${usedCh.join(',')}], span 0→${last.toFixed(2)}s (dur ${(meta?.durationMs / 1000 || 0).toFixed(1)}s)`);
+  if (!nNotes) log('[vis] ⚠ no notes parsed (compressed/SEQU format not supported for piano)');
   for (const c of chVis.chans) { c.ev = []; c.notes = []; c.ei = 0; c.ni = 0; c.pc = -1; c.vol = 100; c.pan = 64; c.exp = 127; c.last = '--'; c.note = -1; c.act = false; }
   for (const e of meta?.chEv ?? []) chVis.chans[e.ch]?.ev.push(e);
   for (const n of meta?.notes ?? []) chVis.chans[n.ch]?.notes.push(n);
@@ -595,7 +606,13 @@ window.addEventListener('resize', () => { if (!crumbEditing) renderCrumbs(); });
 /* ---------------- 启动 ---------------- */
 window.loadTrack = loadTrack;
 window.__updateUI = () => { try { updateUI(); return 'ok'; } catch (e) { return 'ERR ' + e.message; } };
-window.__dbg = () => ({ q: S.queue.length, qFrames: S.qFrames, pcmRecv: S.pcmRecv || 0, first: S.firstPcm, spCalls: S.spCalls || 0, spFed: S.spFed || 0, loaded: S.loaded, playing: S.playing, priming: S.priming, ended: S.ended, played: S.playedFrames, ctx: ctx?.state });
+window.__dbg = () => ({
+  q: S.queue.length, qFrames: S.qFrames, loaded: S.loaded, playing: S.playing, priming: S.priming, ended: S.ended,
+  played: S.playedFrames, ctx: ctx?.state,
+  visT: visClock().toFixed(2), clkSong: S.clkSong?.toFixed(2), clkAt: S.clkAt?.toFixed(2),
+  now: ctx?.currentTime.toFixed(2), latency: ctx ? (ctx.outputLatency || ctx.baseLatency || 0).toFixed(3) : '-',
+  n0: S.meta?.notes?.[0], chEv0: S.meta?.chEv?.[0],
+});
 buildChGrid();
 log('[ui] ma5play started');
 bootWorker();

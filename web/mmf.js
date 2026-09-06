@@ -220,12 +220,12 @@ function parseSequence(u8, off, size, fmt, chBase, out) {
     if (ev.type === 'oct') octShift[ev.ch] = ev.v;
     else if (ev.type === 'note') {
       const note = Math.max(0, Math.min(127, ev.note + octShift[ev.ch] * 12));
-      out.notes.push({ t, end: t + ev.gate * gateTb, note, vel: ev.vel, ch: ev.ch + chBase });
-      out.chEv.push({ t, ch: ev.ch + chBase, k: 'Note', note, vel: ev.vel });
+      out.notes.push({ t: t / 1000, end: (t + ev.gate * gateTb) / 1000, note, vel: ev.vel, ch: ev.ch + chBase });  // 单位: 秒
+      out.chEv.push({ t: t / 1000, ch: ev.ch + chBase, k: 'Note', note, vel: ev.vel });
     } else if (ev.type === 'excl') out.excls.push(ev.data);
-    else if (ev.type === 'cc') out.chEv.push({ t, ch: ev.ch + chBase, k: 'CC', cc: ev.cc, v: ev.v });
-    else if (ev.type === 'pc') out.chEv.push({ t, ch: ev.ch + chBase, k: 'PC', pc: ev.pc });
-    else if (ev.type === 'bend') out.chEv.push({ t, ch: ev.ch + chBase, k: 'Bend' });
+    else if (ev.type === 'cc') out.chEv.push({ t: t / 1000, ch: ev.ch + chBase, k: 'CC', cc: ev.cc, v: ev.v });
+    else if (ev.type === 'pc') out.chEv.push({ t: t / 1000, ch: ev.ch + chBase, k: 'PC', pc: ev.pc });
+    else if (ev.type === 'bend') out.chEv.push({ t: t / 1000, ch: ev.ch + chBase, k: 'Bend' });
   }
   out.durMs = Math.max(out.durMs, t);
 }

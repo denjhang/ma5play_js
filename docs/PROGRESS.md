@@ -239,3 +239,14 @@ smaf_window.cpp Render() 确认真实布局并复刻：
   currentTime 冻结，画面自然停住。切曲/加载重置锚点。
 - 通道表从 100ms 定时器改挂钢琴 rAF（~50ms 节流），与时钟同帧更新。
 - 顺带修复：欠载时未填样本区显式补零。
+
+### 钢琴/通道表全空根因：单位错误 + 可视化日志（用户要求静态对比法）
+- 根因：mmf.js 音符/事件时间轴单位是 **ms**，可视化时钟是**秒**——所有
+  t>0 的事件永远不触发，只有 t=0 的 CC 生效（症状：通道表有 Vol 但
+  Note 恒 --，钢琴全空）。解析器本身正确（静态 dump 对照原生 bass
+  trace：首批事件 20ms 吻合）。修复 = 解析输出统一转秒。
+- 按用户要求加可视化日志（静态解析 ↔ 运行时对比闭环）：
+  - `[vis] parsed: N notes, ch=[..], span 0→Xs`（载入即出）
+  - `[vis] piano first key lit @ t=X.XXs note=C#4 ch=4`（首个点亮）
+  - Sound_1 验证：解析首音符 t=2.0s ↔ 点亮 2.01s，吻合。
+- __dbg 探针扩展：visT/clkSong/clkAt/now/latency/n0/chEv0。
