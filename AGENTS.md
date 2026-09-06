@@ -201,6 +201,8 @@ node switch_test.mjs                # 连播四曲
   web/mktracks.mjs 生成 tracks.json 静态索引（改曲库后重跑 + git add web/assets）。
 - **静态模式**：/api 不可用（Pages/纯静态托管）时浏览器自动用 tracks.json +
   直链 assets/tracks/<relpath>；dev（http + server.mjs）仍走 /api。
-- .github/workflows/pages.yml：push main → 部署 web/（资产入库零 CI 构建），
-  仓库 Settings → Pages → Source: GitHub Actions 启用一次。
+- .github/workflows/pages.yml：push main → 部署 web/（资产入库零 CI 构建）。
+  **Pages build_type 已切 workflow**（PUT /repos/../pages {"build_type":"workflow"}，
+  此前 "从分支部署" 的 Jekyll 会把 README 渲染成博客页顶掉播放器）；
+  web/.nojekyll 防 Jekyll。线上：https://denjhang.github.io/ma5play_js/
 - .gitignore 已解除 web/assets/（wasm/data/预载/图标/曲库全入库）。
