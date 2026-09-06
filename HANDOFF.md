@@ -38,3 +38,41 @@
   chiptune3 npm 包、Modizer 源码
 - dmplayer 侧立项记录：`ma2play/DEVELOPMENT.md:2830`（commit 016c89d）
 - dmplayer 里误建的 `ma5play_js/` 目录已删除（README 移到本仓库）
+
+## 仿真核心更新要点（2026-09-06，源自 dmplayer ma2play round33/34）
+
+dmplayer 侧近期对 libma5t* 做了两轮大改（提速 + 保真修复），JS 端同步
+核心时按此清单执行，完整细节见
+`D:\working\vscode-projects\YM2163-Midi\Denjhang_Music_Player_v16\ma2play\DEVELOPMENT.md`
+（搜 "round33" / "round34" / "round34 附注"）。
+
+### 必须带上（已验证正确）
+1. **MA-2 提速：SUBS 只关 bit9**（16238）——AOR/808 Kingdom/House
+   ~30% 提速，G60 卡顿修复。bit8/10/11 bit-exact 安全。
+   **g_sub163d8_mask / g_ma2_track 必须 per-load 复位**（粘性掩码
+   bug：播过 MA-2 后 MA-5 曲全掉回解释器；JS 单进程连续换曲必踩）。
+2. **循环/暂停/seek 语义**（如 worklet 壳需要）：DLL 状态轮询
+   （MaSound_Control type=6：3=READY/4=PLAYING）判曲终 + 静音掐尾
+   （250ms 窗口 + 状态门控防曲中静音误判）+ 抢占式切片控制调用
+   （ma5t_call_ctl，2M 指令切片防 guest Stop/Seek 死锁）。
+3. **按需映射 blk_demand()**（若用 compact 内存模型）：原机
+   0x3f5xxxx~0x3f7xxxx 是 DS 芯片设备 RAM，预载快照只收非零块导致
+   这片变黑洞。未映射 in-range 块首次写时补零块（i386.c 实现，
+   接入 pstore8/gmp/uc_mem_write 三路）。**这是两个历史大坑
+   （melody13 全曲无声、FM 音色偏离）的公共根源修复。**
+
+### 明确不要带
+- gmp() 未映射写落共享零页的别名行为（幻影内存，两 bug 根源）
+- 0x29b13d0 填充批量钩子写零页的"意外正确"（巧合，demand-map 后失效）
+- 1284 原生移植当前版本（默认关，真路径仍有 +0x834 填充语义分歧，
+  修好 bit-exact 前别开等价优化）
+
+### 模式选择建议
+- **flat 模式优先**（无上述内存坑）；ALLOW_MEMORY_GROWTH。
+- 若性能必须 compact：快照生成时把 0x3f500000~0x3f800000 设备 RAM
+  区强制包含（哪怕全零），或运行时 demand-map——二选一。
+
+### 冒烟验收曲目
+- Melody13（Samsung D500 Pre-downloaded）：历史"全曲无声"案
+- Red Leaf（Panasonic G60）：bit9 分歧案
+- Beauty（DefleMask YMU759）：MA-3 PCM 重载、最慢曲目
