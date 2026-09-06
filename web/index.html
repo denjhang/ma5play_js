@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0e14">
+<title>ma5play — MA-5 WASM Player</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="logo">▮▮</span> ma5play
+    <span class="tag">MA-5 · WASM</span></div>
+  <div class="status" id="status">加载核心…</div>
+</header>
+
+<main class="layout">
+  <!-- 左：文件浏览器 + 历史 -->
+  <aside class="panel files">
+    <div class="panel-title">曲库</div>
+    <label class="btn primary block" for="fileinput">＋ 打开 MMF 文件</label>
+    <input type="file" id="fileinput" accept=".mmf" multiple hidden>
+    <div class="drop" id="drop">拖放 .mmf 到这里</div>
+
+    <div class="panel-title small">演示曲目</div>
+    <ul class="list" id="demoList"></ul>
+
+    <div class="panel-title small">播放历史</div>
+    <ul class="list history" id="historyList"></ul>
+    <button class="btn ghost block" id="clearHistory">清空历史</button>
+  </aside>
+
+  <!-- 右：播放器 -->
+  <section class="panel player" id="player">
+    <div class="track-name" id="trackName">未加载曲目</div>
+    <div class="track-meta" id="trackMeta">从左侧选择或拖入 .mmf 文件</div>
+
+    <canvas id="scope" width="720" height="90"></canvas>
+
+    <div class="time-row">
+      <span id="timeCur">0:00</span>
+      <div class="progress" id="progress"><div class="bar" id="bar"></div></div>
+      <span id="timeEnd">--:--</span>
+    </div>
+
+    <div class="controls">
+      <button class="ctl" id="btnStop" title="停止">⏹</button>
+      <button class="ctl big" id="btnPlay" title="播放/暂停">▶</button>
+      <button class="ctl" id="btnLoop" title="循环">↻</button>
+      <div class="vol">
+        <button class="ctl" id="btnMute" title="静音">🔊</button>
+        <input type="range" id="vol" min="0" max="100" value="80">
+      </div>
+    </div>
+    <div class="meta-row">
+      <span class="chip" id="chipMode">—</span>
+      <span class="chip" id="chipSpeed">—</span>
+      <span class="chip" id="chipState">idle</span>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">ma5t (t386, DLL bit-exact) compiled by emscripten · 音频 48kHz stereo</footer>
+
+<script src="assets/ma5play.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>

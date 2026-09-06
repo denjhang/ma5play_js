@@ -28,9 +28,8 @@ if [ "$MODE" = "node" ]; then
     $SRCS -o "$OUT/ma5play_node.js"
   echo "node 变体 -> $OUT/ma5play_node.js"
 else
-  # web: 快照走 Emscripten 打包文件系统（flat）；compact 路线以后可切 fetch+DecompressionStream
+  # web: 预载映像 fetch 后灌堆（ma5w_set_preload），零 FS 依赖
   /ucrt64/lib/emscripten/emcc $CFLAGS $WFLAGS -sENVIRONMENT=web,worker \
-    --preload-file "$SRC/m5_snapshot.bin@/m5_snapshot.bin" \
     $SRCS -o "$OUT/ma5play.js"
-  echo "web 变体 -> $OUT/ma5play.js(.wasm/.data)"
+  echo "web 变体 -> $OUT/ma5play.js(.wasm)"
 fi

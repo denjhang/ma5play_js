@@ -20,6 +20,7 @@ extern void ma5t_pump_audio(ma5t_ctx_t *);
 extern uint32_t ma5t_take_pcm(ma5t_ctx_t *, uint8_t *, uint32_t);
 extern const char *ma5t_last_error(void);
 extern void ma5t_set_preload_image(const unsigned char *img, unsigned int size);
+extern void ma5t_shutdown(ma5t_ctx_t *c);   /* 切曲：释放引擎后重新 init */
 extern int g_compact_mode;
 
 static ma5t_ctx_t *g_ctx = NULL;
@@ -38,7 +39,10 @@ int ma5w_init(void) {
 
 EMSCRIPTEN_KEEPALIVE
 int ma5w_load(const void *mmf, uint32_t size) {
-    if (!g_ctx) return -1;
+    /* 一次 init 只支持一次 load（DLL 状态机不可重入）：切曲 = shutdown + 重新
+     * init（compact 预载模式下 init 廉价，g_preload_img 静态保留有效） */
+    if (g_ctx) { ma5t_shutdown(g_ctx); g_ctx = NULL; }
+    if (ma5t_init(NULL, &g_ctx) != 0) return -1;
     free(g_mmf);
     g_mmf = malloc(size);             /* ma5t_load 可能持有指针，宿主侧保活 */
     if (!g_mmf) return -1;

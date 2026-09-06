@@ -36,3 +36,33 @@
 1. worklet/ AudioWorklet 壳（块状渲染 + 预渲染缓冲）
 2. pump 末尾导出 `{keyOn,note,vel,type} ch[48]` 快照（MA5T_TRIGLOG 钩子先例）
 3. web/ 键盘可视化 + PWA
+
+## 2026-09-06（晚）— 网页测试播放器
+
+### 新增
+- `web/`：完整测试播放器（index.html / style.css / app.js / server.mjs / prepare.sh）
+  - 播放器控件：播放/暂停/停止/循环/音量/静音 + 波形示波器 + 时间 + 实时速度
+  - 文件浏览器：MMF 文件选择 + 拖放 + 演示曲目 + **播放历史（IndexedDB 存 blob，
+    跨会话可重播，可单条删除/清空）**
+  - 深色现代 UI，移动端适配（flex 折叠 + 大触控目标）
+- 音频管线（测试版）：主线程 wasm pump → Int32 环形帧缓冲（6s）→
+  ScriptProcessorNode(48kHz) 拉取。AudioWorklet + 通道快照是下一阶段。
+
+### 关键修复
+- **切曲**：ma5t 核心 DLL 状态机不可重入，一次 init 只支持一次 load。
+  shell 层 `ma5w_load` 现在 = shutdown + 重新 init（compact 预载下 init 廉价）。
+  node 四连播测试（core/switch_test.mjs）+ 浏览器四连播均通过。
+- app.js 必须以 ES module 加载（顶层 await）；模块作用域函数需显式
+  `window.loadTrack = loadTrack` 才能被页面控制台/自动化访问。
+- 播放时间按 onaudioprocess 实际消费帧计（预渲染缓冲会抵消"渲染秒数"）。
+
+### 踩坑（重要）
+- **一条命令串两次 emcc 构建时，第二次漏传 MA5PLAY_OPT=-O1 会用默认 -O2，
+  撞上 wasm-opt 挂死，挂一小时**。build.sh 默认值仍为 -O2，跑之前务必显式传
+  或先改默认。
+
+### 运行
+```
+core: MA5PLAY_OPT=-O1 sh build.sh web && sh ../web/prepare.sh
+web:  node web/server.mjs   → http://127.0.0.1:8095
+```
