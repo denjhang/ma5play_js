@@ -15,29 +15,20 @@
 </header>
 
 <main class="layout">
-  <!-- ============ 左侧栏：Controls（同 ma2play LeftPane） ============ -->
+  <!-- ============ 左侧栏：Controls（同 ma2play：仅信息，不放传输控件） ============ -->
   <aside class="panel side">
-    <div class="panel-title">Controls</div>
-
+    <div class="panel-title">File Info</div>
     <div class="kv"><span class="k">File</span><span class="v" id="trackName">未加载</span></div>
+    <div class="kv"><span class="k">Title</span><span class="v" id="trackTitle">—</span></div>
+    <div class="kv"><span class="k">Version</span><span class="v ver" id="trackVer">—</span></div>
     <div class="kv"><span class="k">Size</span><span class="v" id="trackSize">—</span></div>
+    <div class="kv"><span class="k">Length</span><span class="v" id="trackLen">—</span></div>
+    <div class="kv"><span class="k">Notes</span><span class="v" id="trackNotes">—</span></div>
     <div class="kv"><span class="k">Backend</span><span class="v">ma5t (t386 WASM)</span></div>
-
-    <div class="ctl-group">
-      <div class="ctl-row">
-        <button class="ctl" id="btnPlay" title="播放/暂停">▶</button>
-        <button class="ctl" id="btnStop" title="停止">⏹</button>
-        <button class="ctl" id="btnLoop" title="循环">↻</button>
-      </div>
-      <div class="ctl-row vol">
-        <button class="ctl small" id="btnMute" title="静音">🔊</button>
-        <input type="range" id="vol" min="0" max="100" value="80">
-      </div>
-      <div class="chips">
-        <span class="chip" id="chipMode">—</span>
-        <span class="chip" id="chipSpeed">—</span>
-        <span class="chip" id="chipState">idle</span>
-      </div>
+    <div class="chips" style="margin-top:10px">
+      <span class="chip" id="chipMode">—</span>
+      <span class="chip" id="chipSpeed">—</span>
+      <span class="chip" id="chipState">idle</span>
     </div>
 
     <div class="panel-title small">本机文件</div>
@@ -48,11 +39,11 @@
 
   <!-- ============ 右侧大区 ============ -->
   <section class="right">
-    <!-- 顶排：钢琴/示波区 + 通道状态区（通道快照待 worklet 阶段，暂占位） -->
+    <!-- 顶排：钢琴键盘（同 ma2play PianoArea）+ 通道状态区 -->
     <div class="toprow">
-      <div class="panel scopepanel">
-        <div class="panel-title">Scope</div>
-        <canvas id="scope" width="640" height="96"></canvas>
+      <div class="panel pianopanel">
+        <div class="panel-title">Piano</div>
+        <canvas id="piano" width="900" height="110"></canvas>
       </div>
       <div class="panel statuspanel">
         <div class="panel-title">通道状态 <span class="dim">（48ch 快照待 AudioWorklet 阶段）</span></div>
@@ -60,16 +51,21 @@
       </div>
     </div>
 
-    <!-- 底排：文件浏览器 + Log（同 ma2play BottomLeft/BottomRight） -->
+    <!-- 底排：文件浏览器（含传输条）+ Log -->
     <div class="bottomrow">
       <div class="panel browser">
-        <!-- 传输条（同 ma2play SMAF Player header） -->
+        <!-- 传输条（ma2play SMAF Player header 同位置：浏览器面板顶部） -->
         <div class="transport">
           <button class="ctl" id="btnPrev" title="上一曲">⏮</button>
-          <button class="ctl" id="btnPlay2" title="播放/暂停">▶</button>
+          <button class="ctl" id="btnPlay" title="播放/暂停">▶</button>
           <button class="ctl" id="btnNext" title="下一曲">⏭</button>
+          <button class="ctl" id="btnStop" title="停止">⏹</button>
+          <button class="ctl" id="btnLoop" title="循环">↻</button>
           <span class="time" id="timeCur">0:00</span>
+          <span class="time dim" id="timeEnd">/ --:--</span>
           <div class="progress"><div class="bar" id="bar"></div></div>
+          <button class="ctl small" id="btnMute" title="静音">🔊</button>
+          <input type="range" id="vol" min="0" max="100" value="80" title="音量">
         </div>
         <!-- 导航 -->
         <div class="navrow">
@@ -92,7 +88,7 @@
   </section>
 </main>
 
-<footer class="foot">ma5t (t386, DLL bit-exact) compiled by emscripten · 48kHz stereo</footer>
+<footer class="foot">ma5t (t386, DLL bit-exact) compiled by emscripten · 48kHz stereo · render in worker</footer>
 
 <script src="assets/ma5play.js"></script>
 <script type="module" src="app.js"></script>

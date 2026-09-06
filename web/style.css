@@ -72,8 +72,8 @@ body {
 /* ---------- 右侧 ---------- */
 .right { flex: 1; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .toprow { display: flex; gap: 12px; }
-.scopepanel { flex: 1; min-width: 0; }
-#scope { width: 100%; height: 96px; border-radius: 8px; background: var(--panel2); border: 1px solid var(--line); }
+.pianopanel { flex: 1; min-width: 0; }
+#piano { width: 100%; height: 110px; border-radius: 8px; background: var(--panel2); border: 1px solid var(--line); display: block; }
 .statuspanel { width: 430px; flex-shrink: 0; }
 .chgrid {
   display: grid; grid-template-columns: repeat(12, 1fr); gap: 3px;
@@ -93,6 +93,8 @@ body {
 .transport { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .transport .ctl { min-width: 40px; height: 40px; font-size: 15px; }
 .transport .time { font-variant-numeric: tabular-nums; color: var(--dim); font-size: 13px; margin-left: 4px; }
+.transport .time.dim { color: #5a6580; }
+.transport input[type=range] { width: 90px; accent-color: var(--accent); }
 .progress { flex: 1; height: 6px; background: var(--panel2); border-radius: 99px; overflow: hidden; }
 .progress .bar { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--accent2)); }
 

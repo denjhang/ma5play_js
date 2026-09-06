@@ -92,3 +92,41 @@ smaf_window.cpp Render() 确认真实布局并复刻：
   默认目录 ma2play/bin/mmf；仅监听 127.0.0.1。
 - 曲终自动下一曲（列表顺序）；循环开关优先。
 - 浏览器实测：面包屑/后退前进上级/文件夹历史/播放/上一曲下一曲/高亮当前曲 全通过。
+
+## 2026-09-06（三）— Worker 渲染 + MA 版本显示 + ma2play 钢琴复刻
+
+用户反馈三条：ma2 曲目"速度不够"、侧栏要显示 MA-2/3/5、钢琴照抄 ma2play。
+
+### 速度（渲染移入 Worker）
+- 根因不是渲染速度（wasm 实测 2.5~2.9x rt 够用），是主线程 pump 被 UI/渲染
+  竞争饿死。渲染移到 render-worker.js（独立线程），主线程只消费。
+- SAB 方案在本机 IAB webview 不可用（COOP/COEP 头正确但 crossOriginIsolated
+  仍 false）→ 改消息传递：worker 按块 postMessage（transferable），
+  主线程消费后 ack，worker 以未确认帧数流控（4s 在途预算）。
+- **worker 陷阱两枚**：① worker 里必须 importScripts('assets/ma5play.js')
+  （主线程 script 标签进不去）；② pump 必须 trackLoaded 门控——空核心 pump
+  会真的出 PCM 垃圾并占满流控预算，真曲目一块都发不出（症状：永远 buffering）。
+- 状态机从 rAF 改 setInterval(100ms)：隐藏/后台面板 rAF 不触发，时间会冻住。
+- 首载 'loaded' 时主动 ctx.suspend() 进预滚（否则 autoplay 策略下 ctx 已
+  running，预滚门控失效）。
+
+### MMF 解析器（web/mmf.js，移植 libymf825_ma5/src/mmf_parser.cpp）
+- 容器：MMMD+u32 总长，块从偏移 8 起（从 4 起会全空）。
+- MTR: fmt/durTb/gateTb + 通道状态(2/16/32B) + 子块 Mtsq/Mtsu/EXVO/Mtsp。
+- 事件：HPS(fmt0，note=sig&15+((sig>>4&3)+3)*12+八度移位) /
+  MobileNormal(fmt2) / Mobile32(fmt3)。
+- SysEx = F0+长度varint+数据+F7；版本判定同 mmf_detect_version_from_exclusives
+  （实测：Melody01→MA-5，Dot Beat→MA-2，BrilliantSnow→MA-2[文件自标 MA-2]）。
+- CNTI 标题：code_type!=0 时是逗号分隔 "ST:title" 文本。
+
+### 钢琴（照抄 RenderPianoArea）
+- 音域 12..107(C0..B8)、白键先画黑键后画、黑键 x=(wk-1)*ww+ww-bw/2、
+  bw=ww*0.65、黑键高 62%、blend=0.55+lv*0.45 向键底色混合、
+  kChColors[16] 通道配色、C 音名、Ch 标签——逐项同源移植到 canvas。
+- 数据源 = parser 时间轴（VIS_PARSER 同思路）：音符按 playedFrames 实际
+  播放时钟点亮。48ch 快照仍待 AudioWorklet 阶段。
+
+### 布局修正
+- 播放/停止/循环/音量全部并入文件浏览器上方传输条（ma2play SMAF Player
+  header 同位置）；侧栏只剩 File Info（File/Title/Version/Size/Length/
+  Notes/Backend）+ 本机文件打开。

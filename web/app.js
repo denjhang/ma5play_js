@@ -1,17 +1,18 @@
-// app.js — ma5play 测试播放器
-// 布局同 ma2play smaf_window：左 Controls | 右上 示波器+通道状态 | 右下 文件浏览器+Log
-// 音频：主线程 wasm pump → Int32 环形帧缓冲(6s) → ScriptProcessorNode(48kHz)。
-//   priming 预滚：攒满 2s 才开声；欠载自动回预滚（不连续小口供声）。
-'use strict';
+// app.js — ma5play 测试播放器 v3
+// 布局同 ma2play：左 File Info | 右上 钢琴+通道状态 | 右下 文件浏览器(含传输条)+Log
+// 音频：Worker 渲染（独立线程，不受 UI 卡顿影响）→ 消息传递 PCM 块（transferable）
+//   → 主线程帧队列 → ScriptProcessor(48kHz) 消费后 ack 流控。
+// 钢琴 = parser 可视化（ma2play VIS_PARSER 同源思路）：MMF 乐谱音符时间轴按
+// 实际播放时钟（playedFrames）点亮。48ch 通道快照待 AudioWorklet 阶段。
+import { parseMMF } from './mmf.js';
 
 const $ = id => document.getElementById(id);
 const FRAMES_PER_SEC = 48000;
-const RING_SECS = 6;
 const PREROLL_FRAMES = FRAMES_PER_SEC * 2;
 const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 const status = (t, ok) => { $('status').textContent = t; $('status').classList.toggle('ok', !!ok); };
 
-/* ---------------- Log 面板 ---------------- */
+/* ---------------- Log ---------------- */
 const logEl = $('log');
 function log(msg) {
   const t = new Date();
@@ -25,34 +26,71 @@ function log(msg) {
 
 /* ---------------- 状态 ---------------- */
 const S = {
-  coreReady: false, loaded: false, playing: false, loop: false, ended: false,
-  priming: false,
-  name: null, curBuf: null,
-  ring: new Int32Array(FRAMES_PER_SEC * RING_SECS),
-  rd: 0, wr: 0, totalWr: 0, playedFrames: 0,
-  musicSeen: false, silentFrames: 0, noPcm: 0,
-  speed: 0,
+  workerReady: false, loaded: false, playing: false, loop: false, ended: false,
+  priming: false, switching: false,
+  name: null, curPath: null,
+  meta: null,
+  playedFrames: 0, speed: 0,
+  queue: [],                    // 待播 PCM 块 [{i16: Int16Array, frames}]
+  qFrames: 0,                   // 队列总帧数
 };
-let M = null, pcmPtr = 0, loadPtr = 0;
 let ctx = null, procNode = null, gainNode = null, muted = false;
+let worker = null;
 
-/* ---------------- wasm 核心 ---------------- */
-async function bootCore() {
-  status('加载核心…');
-  M = await ma5play({ locateFile: p => 'assets/' + p });
-  const img = await (await fetch('assets/preload.bin')).arrayBuffer();
-  const p = M._malloc(img.byteLength);
-  new Uint8Array(M.HEAPU8.buffer, M.HEAPU8.byteOffset + p, img.byteLength).set(new Uint8Array(img));
-  M._ma5w_set_preload(p, img.byteLength);
-  if (M._ma5w_init() !== 0) { status('核心初始化失败', false); log('[core] init 失败'); return; }
-  pcmPtr = M._malloc(4 * 2400);
-  S.coreReady = true;
-  $('chipMode').textContent = M._ma5w_compact_mode() ? 'compact 预载' : 'flat';
-  status('核心就绪', true);
-  log(`[core] ma5t 就绪（${M._ma5w_compact_mode() ? 'compact 预载' : 'flat'}，映像 ${(img.byteLength / 1048576).toFixed(1)}MB）`);
+/* ---------------- 渲染 Worker ---------------- */
+function bootWorker() {
+  worker = new Worker('render-worker.js');
+  worker.onmessage = e => {
+    const m = e.data;
+    if (m.type === 'ready') {
+      S.workerReady = true;
+      $('chipMode').textContent = m.compact ? 'compact 预载' : 'flat';
+      status('核心就绪（worker）', true);
+      log(`[core] ma5t worker 就绪（${m.compact ? 'compact 预载' : 'flat'}）`);
+    } else if (m.type === 'pcm') {
+      S.pcmRecv = (S.pcmRecv || 0) + 1;
+      try {
+        S.queue.push({ i16: new Int16Array(m.buf), frames: m.frames });
+        S.qFrames += m.frames;
+        if (!S.firstPcm) S.firstPcm = { frames: m.frames, bytes: m.buf.byteLength, qLen: S.queue.length };
+      } catch (e) { if (S.pcmRecv < 3) log('[pcm] ' + e.message + ' buf=' + (m.buf ? m.buf.byteLength : 'null')); }
+    } else if (m.type === 'speed') {
+      S.speed = m.v / 100;
+    } else if (m.type === 'loaded') {
+      if (m.ok) {
+        S.loaded = true; S.ended = false; S.playing = true; S.priming = true;
+        S.playedFrames = 0;
+        $('trackName').textContent = S.name.replace(/\.mmf$/i, '');
+        $('trackSize').textContent = (S.size / 1024).toFixed(1) + ' KB';
+        showMeta();
+        log(`[play] ${S.curPath || S.name}`);
+        ensureAudio();
+        if (ctx.state === 'running') ctx.suspend();   // 预滚：先攒缓冲再开声
+        $('chipState').textContent = 'buffering';
+        syncPlayBtn();
+      } else {
+        status('MaSound_Load 失败', false);
+        log(`[load] ${S.name}: ${m.err ?? 'MaSound_Load 失败'}`);
+      }
+      S.switching = false;
+    } else if (m.type === 'log') { log('[w] ' + m.msg); }
+    else if (m.type === 'end') { songEnd(); }
+    else if (m.type === 'error') { status('核心错误: ' + m.msg, false); log('[core] ' + m.msg); }
+  };
+  worker.onerror = e => log('[worker] ' + e.message);
+  worker.postMessage({ cmd: 'init' });
+}
+function showMeta() {
+  const ma = S.meta?.version ? `MA-${S.meta.version}` : '未知';
+  $('trackVer').textContent = ma;
+  $('trackVer').style.color = ma === 'MA-5' ? 'var(--accent2)' : ma === '未知' ? 'var(--dim)' : 'var(--accent)';
+  $('trackTitle').textContent = S.meta?.title || '—';
+  $('trackLen').textContent = S.meta?.durationMs ? fmt(S.meta.durationMs / 1000) : '—';
+  $('timeEnd').textContent = '/ ' + (S.meta?.durationMs ? fmt(S.meta.durationMs / 1000) : '--:--');
+  $('trackNotes').textContent = S.meta?.notes?.length ?? 0;
 }
 
-/* ---------------- 音频 ---------------- */
+/* ---------------- 音频消费 ---------------- */
 function ensureAudio() {
   if (ctx) return;
   ctx = new AudioContext({ sampleRate: 48000, latencyHint: 'playback' });
@@ -62,20 +100,27 @@ function ensureAudio() {
   procNode = ctx.createScriptProcessor(4096, 0, 2);
   procNode.onaudioprocess = ev => {
     const L = ev.outputBuffer.getChannelData(0), R = ev.outputBuffer.getChannelData(1);
-    let fed = 0;
+    S.spCalls = (S.spCalls || 0) + 1;
+    let fed = 0, blk = S.queue[0], bi = 0;
     for (let i = 0; i < L.length; i++) {
-      if (S.rd !== S.wr) {
-        const f = S.ring[S.rd];
-        L[i] = ((f << 16) >> 16) / 32768;
-        R[i] = (f >> 16) / 32768;
-        S.rd = (S.rd + 1) % S.ring.length;
-        fed++;
-      } else { L[i] = R[i] = 0; }
+      if (!blk) break;
+      const l = blk.i16[(bi) * 2], r = blk.i16[(bi) * 2 + 1];
+      L[i] = l / 32768; R[i] = r / 32768;
+      bi++; fed++;
+      if (bi >= blk.frames) {
+        S.queue.shift(); S.qFrames -= blk.frames;
+        worker.postMessage({ cmd: 'ack', frames: blk.frames });
+        blk = S.queue[0]; bi = 0;
+      }
     }
+    S.spFed = (S.spFed || 0) + fed;
     if (fed) S.playedFrames += fed;
+    else if (!S.priming && S.playing && !S.ended) {  // 欠载：静一拍回预滚
+      for (let i2 = 0; i2 < L.length; i2++) L[i2] = R[i2] = 0;
+    }
   };
   procNode.connect(gainNode);
-  setInterval(fillLoop, 120);
+  setInterval(tick, 100);                       // 定时器而非 rAF：后台/隐藏面板也要推进状态机
 }
 function applyVolume() { if (gainNode) gainNode.gain.value = muted ? 0 : $('vol').value / 100; }
 function fadeIn() {
@@ -85,67 +130,29 @@ function fadeIn() {
   gainNode.gain.linearRampToValueAtTime(muted ? 0 : $('vol').value / 100, t + 0.04);
 }
 
-function fillLoop() {
-  if (!S.loaded || S.ended) return;
-  const cap = S.ring.length;
-  const t0 = performance.now();
-  let audioMs = 0, wallBusyMs = 0;
-  const buffered = () => (S.wr - S.rd + cap) % cap;
-  if (S.playing && !S.priming && ctx && ctx.state === 'running' && buffered() === 0 && !S.ended) {
-    S.priming = true; ctx.suspend(); $('chipState').textContent = 'buffering';
-  }
-  while (true) {
-    const used = buffered();
-    if (cap - used < FRAMES_PER_SEC * 3) break;
-    M._ma5w_pump_seq();
-    M._ma5w_pump_audio();
-    const bytes = M._ma5w_take_pcm(pcmPtr, 4 * 2400);
-    if (bytes === 0) {
-      if (S.musicSeen && ++S.noPcm > 5) return songEnd();
-      break;
-    }
-    S.noPcm = 0;
-    const frames = bytes / 4;
-    const src = new Int16Array(M.HEAPU8.buffer, M.HEAPU8.byteOffset + pcmPtr, frames * 2);
-    let nz = false;
-    for (let i = 0; i < frames; i++) {
-      const l = src[i * 2], r = src[i * 2 + 1];
-      if (l | r) nz = true;
-      S.ring[S.wr] = (l & 0xffff) | ((r & 0xffff) << 16);
-      S.wr = (S.wr + 1) % cap;
-    }
-    S.totalWr += frames; audioMs += frames / 48; wallBusyMs = performance.now() - t0;
-    if (nz) { S.musicSeen = true; S.silentFrames = 0; }
-    else if (S.musicSeen && (S.silentFrames += frames) > FRAMES_PER_SEC * 2) return songEnd();
-  }
-  if (wallBusyMs > 5 && audioMs > 0) S.speed = audioMs / wallBusyMs;
-  if (S.priming && S.playing && buffered() >= PREROLL_FRAMES) {
+function tick() {
+  if (!S.loaded) return;
+  // 预滚完成 → 开声；播放中耗尽 → 回预滚（攒满再续，不连续小口供声）
+  if (S.priming && S.playing && S.qFrames >= PREROLL_FRAMES) {
     S.priming = false;
     fadeIn();
     ctx.resume();
     $('chipState').textContent = 'playing';
+  } else if (!S.priming && S.playing && ctx.state === 'running' && S.qFrames === 0 && !S.ended) {
+    S.priming = true;
+    ctx.suspend();
+    $('chipState').textContent = 'buffering';
   }
   updateUI();
 }
 
-function songEnd() {
-  S.ended = true; S.playing = false;
-  $('chipState').textContent = 'end';
-  syncPlayBtns();
-  log(`[play] 曲终 ${fmt(S.playedFrames / FRAMES_PER_SEC)}`);
-  if (S.loop) setTimeout(() => S.curBuf && loadTrack(S.name, S.curBuf, S.curPath), 500);
-  else nextTrack(true);
-}
-
 /* ---------------- 曲目 ---------------- */
-let switching = false;
 async function loadTrack(name, buf, path) {
-  if (!S.coreReady) await bootCore();
-  if (!S.coreReady || switching) return false;
-  switching = true;
+  if (!S.workerReady || S.switching) return false;
+  S.switching = true;
   $('chipState').textContent = 'switch';
   try {
-    if (ctx && gainNode && S.playing) {
+    if (ctx && gainNode && S.playing) {        // 淡出旧曲
       const t = ctx.currentTime;
       gainNode.gain.cancelScheduledValues(t);
       gainNode.gain.setValueAtTime(gainNode.gain.value, t);
@@ -153,58 +160,163 @@ async function loadTrack(name, buf, path) {
       await new Promise(r => setTimeout(r, 90));
       ctx.suspend();
     }
-    S.playing = false; S.loaded = false;
-    S.rd = S.wr = S.totalWr = 0; S.playedFrames = 0;
-    S.musicSeen = false; S.silentFrames = 0; S.noPcm = 0;
-    S.ended = false; S.name = name; S.curBuf = buf; S.curPath = path ?? S.curPath;
-    if (loadPtr) M._free(loadPtr);
-    loadPtr = M._malloc(buf.byteLength);
-    new Uint8Array(M.HEAPU8.buffer, M.HEAPU8.byteOffset + loadPtr, buf.byteLength).set(new Uint8Array(buf));
-    if (M._ma5w_load(loadPtr, buf.byteLength) !== 0) {
-      status('MaSound_Load 失败', false);
-      log(`[load] ${name}: MaSound_Load 失败`);
-      return false;
-    }
-    if (M._ma5w_open_standby_start() !== 0) { status('standby 启动失败', false); return false; }
-    S.loaded = true;
-    $('trackName').textContent = name.replace(/\.mmf$/i, '');
-    $('trackSize').textContent = (buf.byteLength / 1024).toFixed(1) + ' KB';
-    log(`[play] ${path || name}`);
-    play();
+    S.playing = false; S.loaded = false; S.ended = false;
+    S.name = name; S.curPath = path ?? null; S.size = buf.byteLength;
+    S.playedFrames = 0;
+    S.queue = []; S.qFrames = 0;
+    S.meta = parseMMF(buf);
+    piano.onTrack(S.meta);
+    ensureAudio();
+    worker.postMessage({ cmd: 'load', buf }, [buf]);
     return true;
-  } finally { switching = false; }
+  } catch (e) {
+    log('[load] ' + e.message);
+    S.switching = false;
+    return false;
+  }
 }
 function play() {
   if (!S.loaded) return;
-  ensureAudio();
-  const buffered = () => (S.wr - S.rd + S.ring.length) % S.ring.length;
-  if (ctx.state === 'suspended' || buffered() < PREROLL_FRAMES) {
-    S.priming = true; S.playing = true;
-    $('chipState').textContent = 'buffering';
-    syncPlayBtns();
-    fillLoop();
-    return;
-  }
-  ctx.resume(); fadeIn();
   S.playing = true;
-  $('chipState').textContent = 'playing';
-  syncPlayBtns();
+  if (S.priming || S.qFrames < PREROLL_FRAMES) {
+    S.priming = true;
+    $('chipState').textContent = 'buffering';
+  } else {
+    ctx.resume(); fadeIn();
+    $('chipState').textContent = 'playing';
+  }
+  syncPlayBtn();
 }
 function pause() {
   S.playing = false;
   if (ctx && S.loaded) { $('chipState').textContent = 'paused'; ctx.suspend(); }
-  syncPlayBtns();
+  syncPlayBtn();
 }
 function stop() {
-  pause(); S.rd = S.wr = 0; S.playedFrames = 0;
+  pause(); S.playedFrames = 0; piano.onTrack(S.meta);
   $('chipState').textContent = 'stop'; updateUI();
 }
-function syncPlayBtns() { $('btnPlay').textContent = $('btnPlay2').textContent = S.playing ? '⏸' : '▶'; }
+function syncPlayBtn() { $('btnPlay').textContent = S.playing ? '⏸' : '▶'; }
+function songEnd() {
+  if (S.ended) return;
+  S.ended = true; S.playing = false;
+  $('chipState').textContent = 'end';
+  syncPlayBtn();
+  log(`[play] 曲终 ${fmt(S.playedFrames / FRAMES_PER_SEC)}`);
+  if (S.loop) setTimeout(() => replayCurrent(), 500);
+  else shiftTrack(1, true);
+}
+async function replayCurrent() {
+  if (!S.curPath) return;
+  const r = await fetch('/api/file?path=' + encodeURIComponent(S.curPath));
+  if (r.ok) loadTrack(S.name, await r.arrayBuffer(), S.curPath);
+}
 
-/* ---------------- 文件浏览器（同 ma2play 设计） ---------------- */
+/* ---------------- 钢琴（照抄 ma2play RenderPianoArea） ---------------- */
+const CH_COLORS = [                            // kChColors[16]
+  [80, 220, 80], [80, 140, 255], [255, 80, 80], [255, 180, 60],
+  [180, 80, 255], [80, 220, 220], [255, 220, 80], [220, 80, 180],
+  [140, 200, 80], [80, 180, 180], [200, 140, 80], [180, 100, 140],
+  [100, 160, 220], [220, 160, 160], [160, 220, 160], [200, 200, 100],
+];
+const CH_NAMES = Array.from({ length: 16 }, (_, i) => 'Ch' + i);
+const piano = (() => {
+  const c = $('piano'), g = c.getContext('2d');
+  const MIN_NOTE = 12, MAX_NOTE = 107;            // C0..B8（同 ma2play）
+  const isBlack = n => [1, 3, 6, 8, 10].includes(n % 12);
+  let notes = [], cursor = 0;
+  // blendKey：通道色向白/黑键底色混合，blendLv = 0.55 + lv*0.45（同 ma2play）
+  const blendKey = (col, lv, black) => {
+    const b = black ? 20 : 255, bl = 0.55 + lv * 0.45;
+    return `rgb(${b + ((col[0] - b) * bl) | 0},${b + ((col[1] - b) * bl) | 0},${b + ((col[2] - b) * bl) | 0})`;
+  };
+  function draw() {
+    requestAnimationFrame(draw);
+    const W = c.width, H = c.height;
+    const t = S.playedFrames / FRAMES_PER_SEC;
+    // 活跃音符表（同 s_activeNotes 逻辑：level = vel/127，同名取最大）
+    const active = new Map();
+    while (cursor < notes.length && notes[cursor].end < t - 0.5) cursor++;
+    for (let i = cursor; i < notes.length; i++) {
+      const nt = notes[i];
+      if (nt.t > t) break;
+      if (nt.end < t || nt.note < 0 || nt.note > 127) continue;
+      let lv = nt.vel / 127;
+      lv = Math.min(1, Math.max(0.15, lv));
+      const prev = active.get(nt.note);
+      if (!prev || lv > prev.lv) active.set(nt.note, { lv, ch: nt.ch });
+    }
+    // 布局（同 ma2play：白键数分宽，黑键 0.65 倍、右偏半键）
+    const numWhite = (() => { let k = 0; for (let n = MIN_NOTE; n <= MAX_NOTE; n++) if (!isBlack(n)) k++; return k; })();
+    const wkW = Math.max(4, W / numWhite);
+    const bkW = wkW * 0.65;
+    const wkH = H - 4, bkH = wkH * 0.62;
+    g.clearRect(0, 0, W, H);
+    // Pass 1: 白键
+    let wkIdx = 0;
+    for (let n = MIN_NOTE; n <= MAX_NOTE; n++) {
+      if (isBlack(n)) continue;
+      const x = wkIdx * wkW;
+      const a = active.get(n);
+      g.fillStyle = a ? blendKey(CH_COLORS[a.ch], a.lv, false) : 'rgb(255,255,255)';
+      g.fillRect(x, 0, wkW - 1, wkH);
+      g.strokeStyle = 'rgb(80,80,80)';
+      g.strokeRect(x + 0.5, 0.5, wkW - 1, wkH - 1);
+      if (n % 12 === 0 && wkW > 16) {                    // C 音名
+        g.fillStyle = 'rgba(0,0,0,0.7)';
+        g.font = '9px system-ui';
+        g.fillText(`C${(n / 12) - 1}`, x + 2, wkH - 4);
+      }
+      if (a && wkW > 12) {                               // 通道标签
+        g.fillStyle = 'rgba(0,0,0,0.78)';
+        g.font = '8px system-ui';
+        g.fillText(CH_NAMES[a.ch], x + 1, 10);
+      }
+      wkIdx++;
+    }
+    // Pass 2: 黑键（x = 前一白键右缘 - 半个黑键宽）
+    wkIdx = 0;
+    for (let n = MIN_NOTE; n <= MAX_NOTE; n++) {
+      if (!isBlack(n)) { wkIdx++; continue; }
+      const x = (wkIdx - 1) * wkW + wkW - bkW * 0.5;
+      const a = active.get(n);
+      g.fillStyle = a ? blendKey(CH_COLORS[a.ch], a.lv, true) : 'rgb(20,20,20)';
+      g.fillRect(x, 0, bkW, bkH);
+      g.strokeStyle = 'rgb(0,0,0)';
+      g.strokeRect(x + 0.5, 0.5, bkW - 1, bkH - 1);
+      if (a && bkW > 8) {
+        g.fillStyle = 'rgba(255,255,255,0.78)';
+        g.font = '8px system-ui';
+        g.fillText(CH_NAMES[a.ch], x + 1, 10);
+      }
+    }
+  }
+  requestAnimationFrame(draw);
+  return { onTrack(meta) { notes = (meta?.notes ?? []).slice().sort((a, b) => a.t - b.t); cursor = 0; } };
+})();
+
+/* ---------------- UI ---------------- */
+function updateUI() {
+  const heard = S.playedFrames / FRAMES_PER_SEC;
+  $('timeCur').textContent = fmt(heard);
+  const total = S.meta?.durationMs ? S.meta.durationMs / 1000 : 300;
+  $('bar').style.width = Math.min(100, (heard / total) * 100) + '%';
+  $('chipSpeed').textContent = S.speed ? S.speed.toFixed(2) + 'x rt' : '—';
+}
+function buildChGrid() {
+  const g = $('chGrid'); g.innerHTML = '';
+  for (let i = 0; i < 48; i++) {
+    const d = document.createElement('div');
+    d.className = `chcell ${i < 16 ? 'fm' : 'pcm'}`;
+    d.textContent = i < 16 ? `F${i}` : `P${i - 16}`;
+    g.appendChild(d);
+  }
+}
+
+/* ---------------- 文件浏览器 ---------------- */
 const browser = {
-  path: null, parent: null, entries: [],
-  back: [], fwd: [],          // 导航栈
+  path: null, parent: null,
+  back: [], fwd: [],
   history: JSON.parse(localStorage.getItem('folderHist') || '[]'),
 };
 async function navigateTo(path, pushHist = true) {
@@ -228,9 +340,8 @@ function renderHistSelect() {
   sel.innerHTML = '';
   if (!browser.history.length) { sel.innerHTML = '<option value="">(无历史)</option>'; return; }
   for (const p of browser.history) {
-    const short = p.split(/[\\/]/).filter(Boolean).pop() || p;
     const o = document.createElement('option');
-    o.value = p; o.textContent = short; o.title = p;
+    o.value = p; o.textContent = p.split(/[\\/]/).filter(Boolean).pop() || p; o.title = p;
     sel.appendChild(o);
   }
 }
@@ -238,7 +349,6 @@ function renderBrowser() {
   $('navBack').disabled = !browser.back.length;
   $('navFwd').disabled = !browser.fwd.length;
   $('navUp').disabled = !browser.parent;
-  // 面包屑：D:\a\b → [D:] [a] [b]，逐段可点
   const crumbs = $('crumbs'); crumbs.innerHTML = '';
   const parts = browser.path.split(/[\\/]/).filter(Boolean);
   let acc = '';
@@ -250,7 +360,6 @@ function renderBrowser() {
     s.onclick = () => navigateTo(acc);
     crumbs.appendChild(s);
   });
-  // 文件列表
   const ul = $('fileList'); ul.innerHTML = '';
   for (const e of browser.entries) {
     const li = document.createElement('li');
@@ -260,19 +369,18 @@ function renderBrowser() {
       li.onclick = () => navigateTo(li.dataset.path);
     } else {
       li.innerHTML = `<span class="diricon">🎵</span><span class="nm">${e.name}</span><span class="sub">${(e.size / 1024).toFixed(0)}K</span>`;
-      li.onclick = () => playByPath(li.dataset.path, e.name);
+      li.onclick = () => playByPath(li.dataset.path);
     }
     ul.appendChild(li);
   }
   markActiveFile();
 }
-async function playByPath(path, name) {
+async function playByPath(path) {
   const r = await fetch('/api/file?path=' + encodeURIComponent(path));
   if (!r.ok) { log(`[load] 读取失败 ${path}`); return; }
   const buf = await r.arrayBuffer();
-  if (await loadTrack(name ?? path.split(/[\\/]/).pop(), buf, path)) markActiveFile();
+  if (await loadTrack(path.split(/[\\/]/).pop(), buf, path)) markActiveFile();
 }
-function filesInView() { return [...document.querySelectorAll('#fileList li')].filter(li => !li.querySelector('.diricon') || li.textContent.includes('🎵')); }
 function markActiveFile() {
   document.querySelectorAll('#fileList li').forEach(li =>
     li.classList.toggle('active', li.dataset.path === S.curPath));
@@ -281,56 +389,16 @@ function shiftTrack(dir, auto = false) {
   const files = [...document.querySelectorAll('#fileList li')].filter(li => li.textContent.includes('🎵'));
   if (!files.length) return;
   const idx = files.findIndex(li => li.dataset.path === S.curPath);
-  let next;
-  if (idx < 0) next = files[0];
-  else next = dir > 0 ? files[idx + 1] : files[idx - 1];
+  const next = idx < 0 ? files[0] : (dir > 0 ? files[idx + 1] : files[idx - 1]);
   if (!next) { if (!auto) log('[nav] ' + (dir > 0 ? '已是最后一曲' : '已是第一曲')); return; }
   playByPath(next.dataset.path);
-}
-function nextTrack(auto) { shiftTrack(1, auto); }
-
-/* ---------------- 通道状态占位（48ch，待 worklet 快照接入） ---------------- */
-function buildChGrid() {
-  const g = $('chGrid'); g.innerHTML = '';
-  for (let i = 0; i < 48; i++) {
-    const d = document.createElement('div');
-    d.className = `chcell ${i < 16 ? 'fm' : 'pcm'}`;
-    d.id = 'ch' + i;
-    d.textContent = i < 16 ? `F${i}` : `P${i - 16}`;
-    g.appendChild(d);
-  }
-}
-
-/* ---------------- UI ---------------- */
-function updateUI() {
-  const heard = S.playedFrames / FRAMES_PER_SEC;
-  $('timeCur').textContent = fmt(heard);
-  $('bar').style.width = Math.min(100, (heard / 300) * 100) + '%';
-  $('chipSpeed').textContent = S.speed ? S.speed.toFixed(2) + 'x rt' : '—';
-}
-function drawScope() {
-  const c = $('scope'), g = c.getContext('2d');
-  const W = c.width, H = c.height, mid = H / 2;
-  g.clearRect(0, 0, W, H);
-  g.strokeStyle = '#1d2740'; g.beginPath(); g.moveTo(0, mid); g.lineTo(W, mid); g.stroke();
-  if (S.loaded) {
-    g.strokeStyle = '#5b8cff'; g.lineWidth = 1.5; g.beginPath();
-    const N = 300, span = Math.floor(S.ring.length / N);
-    for (let x = 0; x < N; x++) {
-      const f = S.ring[(S.wr - S.ring.length + x * span + S.ring.length * 2) % S.ring.length];
-      g.lineTo((x / N) * W, mid + (((f << 16) >> 16) / 32768) * mid * 0.92);
-    }
-    g.stroke();
-  }
-  requestAnimationFrame(drawScope);
 }
 
 /* ---------------- 本机文件 ---------------- */
 async function handleFiles(files) {
   for (const f of files) {
     if (!/\.mmf$/i.test(f.name)) continue;
-    const buf = await f.arrayBuffer();
-    loadTrack(f.name, buf, null);
+    loadTrack(f.name, await f.arrayBuffer(), null);
   }
 }
 
@@ -338,11 +406,8 @@ async function handleFiles(files) {
 $('fileinput').onchange = e => handleFiles(e.target.files);
 document.addEventListener('dragover', e => { e.preventDefault(); $('drop').classList.add('over'); });
 document.addEventListener('dragleave', () => $('drop').classList.remove('over'));
-document.addEventListener('drop', e => {
-  e.preventDefault(); $('drop').classList.remove('over');
-  handleFiles(e.dataTransfer.files);
-});
-$('btnPlay').onclick = $('btnPlay2').onclick = () => S.playing ? pause() : play();
+document.addEventListener('drop', e => { e.preventDefault(); $('drop').classList.remove('over'); handleFiles(e.dataTransfer.files); });
+$('btnPlay').onclick = () => S.playing ? pause() : play();
 $('btnStop').onclick = stop;
 $('btnPrev').onclick = () => shiftTrack(-1);
 $('btnNext').onclick = () => shiftTrack(1);
@@ -356,9 +421,10 @@ $('folderHist').onchange = e => { if (e.target.value) { navigateTo(e.target.valu
 
 /* ---------------- 启动 ---------------- */
 window.loadTrack = loadTrack;
+window.__updateUI = () => { try { updateUI(); return 'ok'; } catch (e) { return 'ERR ' + e.message; } };
+window.__dbg = () => ({ q: S.queue.length, qFrames: S.qFrames, pcmRecv: S.pcmRecv || 0, first: S.firstPcm, spCalls: S.spCalls || 0, spFed: S.spFed || 0, loaded: S.loaded, playing: S.playing, priming: S.priming, ended: S.ended, played: S.playedFrames, ctx: ctx?.state });
 buildChGrid();
-drawScope();
 log('[ui] ma5play 启动');
-bootCore();
-navigateTo('');      // 默认目录（服务器端 DEFAULT_DIR）
+bootWorker();
+navigateTo('');
 renderHistSelect();
