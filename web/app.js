@@ -670,12 +670,50 @@ const browser = {
   path: null, parent: null,
   back: [], fwd: [],
   history: JSON.parse(localStorage.getItem('folderHist') || '[]'),
+  staticIdx: null,            // 静态曲库索引（GitHub Pages 无后端时的数据源）
 };
+/* 静态模式：assets/tracks.json 索引 + assets/tracks/ 直链。
+ * /api 不可用（纯静态托管）时自动启用；本地 dev 走 server.mjs 的 /api。 */
+async function loadStaticIndex() {
+  if (browser.staticIdx !== null) return browser.staticIdx;
+  try {
+    const r = await fetch('assets/tracks.json');
+    if (!r.ok) throw 0;
+    browser.staticIdx = await r.json();
+  } catch { browser.staticIdx = {}; }
+  return browser.staticIdx;
+}
+function staticHasApi() {
+  return location.protocol === 'http:' && !/[?&]static/.test(location.search) && !window.__forceStatic;
+}
 async function navigateTo(path, pushHist = true) {
-  const r = await fetch('/api/list?path=' + encodeURIComponent(path));
-  const d = await r.json();
-  if (d.error) { log(`[browser] cannot open ${path}: ${d.error}`); return; }
-  if (browser.path && pushHist) { browser.back.push(browser.path); browser.fwd = []; }
+  path = String(path ?? '').replace(/\\/g, '/').replace(/\/+$/, '');
+  let d;
+  if (staticHasApi()) {
+    try {
+      const r = await fetch('/api/list?path=' + encodeURIComponent(path));
+      d = await r.json();
+      if (d.error) { log(`[browser] cannot open ${path}: ${d.error}`); return; }
+    } catch { /* API 不在 → 落到静态 */ }
+  }
+  if (!d) {
+    const idx = await loadStaticIndex();
+    if (!Object.keys(idx).length) { log('[browser] no /api and no tracks.json — drop files onto the page'); return; }
+    const dirs = new Set();
+    for (const k of Object.keys(idx)) {
+      if (k === path) continue;
+      if (path === '' ? true : k.startsWith(path + '/')) {
+        const rest = (path === '' ? k : k.slice(path.length + 1)).replace(/\/+$/, '');
+        if (!rest) continue;
+        dirs.add(rest.split('/')[0]);
+      }
+    }
+    if (path !== '' && !idx[path] && !idx[path + '/'] && !dirs.size) { log(`[browser] no such folder: ${path}`); return; }
+    const entries = [...dirs].sort().map(n => ({ name: n, dir: true }))
+      .concat((idx[path] ?? idx[path + '/'] ?? []).map(e => ({ name: e.name, dir: false, size: e.size })));
+    d = { path, parent: path === '' ? null : path.split('/').slice(0, -1).join('/'), entries };
+  }
+  if (browser.path && pushHist && browser.path !== d.path) { browser.back.push(browser.path); browser.fwd = []; }
   browser.path = d.path; browser.parent = d.parent; browser.entries = d.entries;
   if (pushHist) addFolderHistory(d.path);
   localStorage.setItem('lastDir', d.path);   // 记住上次打开的目录
@@ -706,7 +744,8 @@ function renderBrowser() {
   const ul = $('fileList'); ul.innerHTML = '';
   for (const e of browser.entries) {
     const li = document.createElement('li');
-    li.dataset.path = (browser.path + '\\' + e.name).replace(/\\\\/g, '\\');
+    const sep = browser.path.includes('\\') ? '\\' : '/';
+    li.dataset.path = browser.path ? browser.path + sep + e.name : e.name;
     if (e.dir) {
       li.innerHTML = `<span class="diricon">📁</span><span class="nm">${e.name}</span>`;
       li.onclick = () => navigateTo(li.dataset.path);
@@ -719,9 +758,21 @@ function renderBrowser() {
   markActiveFile();
 }
 async function playByPath(path) {
-  const r = await fetch('/api/file?path=' + encodeURIComponent(path));
-  if (!r.ok) { log(`[load] read failed ${path}`); return; }
-  const buf = await r.arrayBuffer();
+  let buf;
+  if (staticHasApi()) {
+    try {
+      const r = await fetch('/api/file?path=' + encodeURIComponent(path));
+      if (!r.ok) throw 0;
+      buf = await r.arrayBuffer();
+    } catch { /* 落到静态 */ }
+  }
+  if (!buf) {
+    const rel = String(path).replace(/\\/g, '/').replace(/^\/+/, '');
+    const url = 'assets/tracks/' + rel.split('/').map(encodeURIComponent).join('/');
+    const r2 = await fetch(url);
+    if (!r2.ok) { log(`[load] read failed ${path}`); return; }
+    buf = await r2.arrayBuffer();
+  }
   if (await loadTrack(path.split(/[\\/]/).pop(), buf, path)) markActiveFile();
 }
 /* 面包屑（照抄 ma2play：优先显示最内层目录，左侧溢出折叠成 "..."，
@@ -732,11 +783,12 @@ function renderCrumbs() {
   if (crumbEditing) return;
   crumbs.innerHTML = '';
   const parts = browser.path.split(/[\\/]/).filter(Boolean);
+  const sep = browser.path.includes('\\') ? '\\' : '/';
   const accPath = i => {
     let acc = '';
     for (let j = 0; j <= i; j++) {
       const seg = parts[j];
-      acc = j === 0 ? (/[A-Za-z]:$/.test(seg) ? seg + '\\' : seg) : acc.replace(/[\\/]+$/, '') + '\\' + seg;
+      acc = j === 0 ? (/[A-Za-z]:$/.test(seg) ? seg + sep : seg) : acc.replace(/[\\/]+$/, '') + sep + seg;
     }
     return acc;
   };
@@ -855,5 +907,6 @@ window.__dbg = () => ({
 buildChGrid();
 log('[ui] ma5play started');
 bootWorker();
-navigateTo(localStorage.getItem('lastDir') || '');   // 上次打开的目录（无记录用服务器默认）
+const lastDir = localStorage.getItem('lastDir') || '';
+navigateTo(/^[A-Za-z]:[\\/]/.test(lastDir) ? '' : lastDir);   // 绝对盘符路径（dev 留下的）在静态模式无效 → 根目录
 renderHistSelect();

@@ -35,23 +35,40 @@ MD5 against the native reference renderer).
 
 ## Quick start
 
-Requires Node.js and an Emscripten toolchain (or skip the build and use a
-prebuilt release package, which ships `web/assets/` ready to serve).
+**Just browse the deployed site** — the repository ships a built-in library of
+1,484 MMF ringtones (34 MB, the full test corpus) and runs entirely static:
+no backend required. The file browser falls back to a pre-generated
+`assets/tracks.json` index when the optional `/api` server is absent.
+
+To run locally:
 
 ```sh
 # 1. Build the WASM core (git bash; -O1 — see Toolchain notes)
 /d/msys64/usr/bin/bash -lc "cd core && MA5PLAY_OPT=-O1 sh build.sh web"
 
-# 2. Assemble web assets (wasm, preload image, icon)
+# 2. Assemble web assets (wasm, preload image, icon) + regenerate tracks.json
 sh web/prepare.sh
+node web/mktracks.mjs
 
 # 3. Serve
-node web/server.mjs          # → http://127.0.0.1:8095
+node web/server.mjs          # → http://127.0.0.1:8095  (adds /api file browser)
+python -m http.server -d web # or any static server — works too
 ```
 
-The server exposes `/api/list` + `/api/file` over a music directory so the
-file browser can walk your MMF collection; it can be replaced by any static
-host plus a small JSON API, or drop files onto the page directly.
+The dev server exposes `/api/list` + `/api/file` over any directory on disk;
+in pure-static mode the built-in library is served from `web/assets/tracks/`.
+
+## GitHub Pages deployment
+
+`.github/workflows/pages.yml` deploys `web/` on every push to `main` — no CI
+build step needed because the WASM core and the track library are committed.
+Enable it once: **repo Settings → Pages → Source: GitHub Actions**.
+
+If you rebuild the core or change the library, refresh the committed assets:
+
+```sh
+sh web/prepare.sh && node web/mktracks.mjs && git add web/assets
+```
 
 ## How it works
 

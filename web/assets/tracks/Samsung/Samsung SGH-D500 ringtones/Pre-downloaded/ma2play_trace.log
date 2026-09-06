@@ -1,0 +1,324 @@
+23:34:27.879 [t12588] Stop: playing=0 ctx=0000000000000000
+23:34:27.882 [t12588] Stop: done
+23:34:27.906 [t9852] Load: bin_dir=D:\working\vscode-projects\YM2163-Midi\Denjhang_Music_Player_v16\ma2play\bin mmf_size=16979
+23:34:27.911 [t9852] Stop: playing=0 ctx=0000000000000000
+23:34:27.914 [t9852] Stop: done
+23:34:27.922 [t9852] Load: MA-5 → using MA5_API (libymf825_ma5)
+23:34:27.926 [t9852] Load: api->init (sr=48000)
+23:34:27.951 [t9852] Load: api->load_voice_bank dir=D:\working\vscode-projects\YM2163-Midi\Denjhang_Music_Player_v16\ma2play\bin\voice\ymf825_ma3\
+23:34:27.993 [t9852] Load: api->load mmf
+23:34:28.459 [t9852] Load: OK (length=32768 ms)
+23:34:28.463 [t9852] SetLengthMs(32252)
+23:34:28.497 [t12588] SetLengthMs(64784)
+23:34:28.501 [t12588] Start: ctx=0000000002a65510 inLoad=0 playing=0
+23:34:28.505 [t12588] Start: api->start
+23:34:28.509 [t12588] Start: smaf_audio_output_winmm.init
+23:34:29.705 [t12588] Start: launch PumpThread
+23:34:29.709 [t12588] Start: OK
+23:34:29.719 [t20964] PumpThread: start (ctx=0000000002a65510)
+23:34:30.363 [t20964] PumpThread: 50 pumps, 48000 frames, 1000 ms
+23:34:31.387 [t20964] PumpThread: 100 pumps, 96000 frames, 2000 ms
+23:34:32.369 [t20964] PumpThread: 150 pumps, 144000 frames, 3000 ms
+23:34:33.394 [t20964] PumpThread: 200 pumps, 192000 frames, 4000 ms
+23:34:33.580 [t12588] Stop: playing=1 ctx=0000000002a65510
+23:34:33.585 [t12588] Stop: joining PumpThread
+23:34:33.597 [t20964] PumpThread: exit (210 pumps, 201600 frames)
+23:34:33.609 [t12588] Stop: PumpThread joined
+23:34:33.614 [t12588] Stop: smaf_audio_output_winmm.close
+23:34:33.633 [t12588] Stop: api->free ctx=0000000002a65510
+23:34:33.637 [t12588] Stop: done
+23:34:33.652 [t11488] Load: bin_dir=D:\working\vscode-projects\YM2163-Midi\Denjhang_Music_Player_v16\ma2play\bin mmf_size=37466
+23:34:33.657 [t11488] Stop: playing=0 ctx=0000000000000000
+23:34:33.660 [t11488] Stop: done
+23:34:33.670 [t11488] Load: MA-5 → using MA5_API (libymf825_ma5)
+23:34:33.675 [t11488] Load: api->init (sr=48000)
+23:34:33.701 [t11488] Load: api->load_voice_bank dir=D:\working\vscode-projects\YM2163-Midi\Denjhang_Music_Player_v16\ma2play\bin\voice\ymf825_ma3\
+23:34:33.746 [t11488] Load: api->load mmf
+23:34:33.809 [t11488] Load: OK (length=32372 ms)
+23:34:33.812 [t11488] SetLengthMs(31872)
+23:34:33.854 [t12588] SetLengthMs(61532)
+23:34:33.860 [t12588] Start: ctx=0000000002a3bd70 inLoad=0 playing=0
+23:34:33.863 [t12588] Start: api->start
+23:34:33.867 [t12588] Start: smaf_audio_output_winmm.init
+23:34:33.898 [t12588] Start: launch PumpThread
+23:34:33.902 [t12588] Start: OK
+23:34:33.907 [t2672] PumpThread: start (ctx=0000000002a3bd70)
+23:34:34.707 [t2672] PumpThread: 50 pumps, 48000 frames, 1000 ms
+23:34:34.859 [t12588] Stop: playing=1 ctx=0000000002a3bd70
+23:34:34.864 [t12588] Stop: joining PumpThread
+23:34:34.876 [t2672] PumpThread: exit (56 pumps, 53760 frames)
+23:34:34.882 [t12588] Stop: PumpThread joined
+23:34:34.890 [t12588] Stop: smaf_audio_output_winmm.close
+23:34:34.906 [t12588] Stop: api->free ctx=0000000002a3bd70
+23:34:34.911 [t12588] Stop: done
+23:34:39.707 [t12588] Stop: playing=0 ctx=0000000000000000
+23:34:39.711 [t12588] Stop: done
+23:34:39.729 [t13884] Load: bin_dir=D:\working\vscode-projects\YM2163-Midi\Denjhang_Music_Player_v16\ma2play\bin mmf_size=37466
+23:34:39.738 [t13884] Stop: playing=0 ctx=0000000000000000
+23:34:39.741 [t13884] Stop: done
+23:34:39.746 [t13884] Load: MA-5 → using MA5_API (libymf825_ma5)
+23:34:39.750 [t13884] Load: api->init (sr=48000)
+23:34:39.774 [t13884] Load: api->load_voice_bank dir=D:\working\vscode-projects\YM2163-Midi\Denjhang_Music_Player_v16\ma2play\bin\voice\ymf825_ma3\
+23:34:39.817 [t13884] Load: api->load mmf
+23:34:39.877 [t13884] Load: OK (length=32372 ms)
+23:34:39.881 [t13884] SetLengthMs(31872)
+23:34:39.918 [t12588] SetLengthMs(61532)
+23:34:39.923 [t12588] Start: ctx=0000000002a333d0 inLoad=0 playing=0
+23:34:39.926 [t12588] Start: api->start
+23:34:39.933 [t12588] Start: smaf_audio_output_winmm.init
+23:34:39.963 [t12588] Start: launch PumpThread
+23:34:39.966 [t12588] Start: OK
+23:34:39.971 [t6356] PumpThread: start (ctx=0000000002a333d0)
+23:34:40.763 [t6356] PumpThread: 50 pumps, 48000 frames, 1000 ms
+23:34:41.786 [t6356] PumpThread: 100 pumps, 96000 frames, 2000 ms
+23:34:42.774 [t6356] PumpThread: 150 pumps, 144000 frames, 3000 ms
+23:34:43.788 [t6356] PumpThread: 200 pumps, 192000 frames, 4000 ms
+23:34:44.778 [t6356] PumpThread: 250 pumps, 240000 frames, 5000 ms
+23:34:45.803 [t6356] PumpThread: 300 pumps, 288000 frames, 6000 ms
+23:34:46.786 [t6356] PumpThread: 350 pumps, 336000 frames, 7000 ms
+23:34:47.809 [t6356] PumpThread: 400 pumps, 384000 frames, 8000 ms
+23:34:48.796 [t6356] PumpThread: 450 pumps, 432000 frames, 9000 ms
+23:34:49.777 [t6356] PumpThread: 500 pumps, 480000 frames, 10000 ms
+23:34:50.789 [t6356] PumpThread: 550 pumps, 528000 frames, 11000 ms
+23:34:51.772 [t6356] PumpThread: 600 pumps, 576000 frames, 12000 ms
+23:34:52.798 [t6356] PumpThread: 650 pumps, 624000 frames, 13000 ms
+23:34:53.782 [t6356] PumpThread: 700 pumps, 672000 frames, 14000 ms
+23:34:54.809 [t6356] PumpThread: 750 pumps, 720000 frames, 15000 ms
+23:34:55.793 [t6356] PumpThread: 800 pumps, 768000 frames, 16000 ms
+23:34:56.771 [t6356] PumpThread: 850 pumps, 816000 frames, 17000 ms
+23:34:57.790 [t6356] PumpThread: 900 pumps, 864000 frames, 18000 ms
+23:34:58.782 [t6356] PumpThread: 950 pumps, 912000 frames, 19000 ms
+23:34:59.790 [t6356] PumpThread: 1000 pumps, 960000 frames, 20000 ms
+23:35:00.787 [t6356] PumpThread: 1050 pumps, 1008000 frames, 21000 ms
+23:35:01.811 [t6356] PumpThread: 1100 pumps, 1056000 frames, 22000 ms
+23:35:02.779 [t6356] PumpThread: 1150 pumps, 1104000 frames, 23000 ms
+23:35:03.804 [t6356] PumpThread: 1200 pumps, 1152000 frames, 24000 ms
+23:35:04.793 [t6356] PumpThread: 1250 pumps, 1200000 frames, 25000 ms
+23:35:05.774 [t6356] PumpThread: 1300 pumps, 1248000 frames, 26000 ms
+23:35:06.050 [t12588] Stop: playing=1 ctx=0000000002a333d0
+23:35:06.055 [t12588] Stop: joining PumpThread
+23:35:06.065 [t6356] PumpThread: exit (1312 pumps, 1259520 frames)
+23:35:06.070 [t12588] Stop: PumpThread joined
+23:35:06.080 [t12588] Stop: smaf_audio_output_winmm.close
+23:35:06.094 [t12588] Stop: api->free ctx=0000000002a333d0
+23:35:06.097 [t12588] Stop: done
+23:35:06.113 [t19436] Load: bin_dir=D:\working\vscode-projects\YM2163-Midi\Denjhang_Music_Player_v16\ma2play\bin mmf_size=10775
+23:35:06.117 [t19436] Stop: playing=0 ctx=0000000000000000
+23:35:06.121 [t19436] Stop: done
+23:35:06.126 [t19436] Load: MA-5 → using MA5_API (libymf825_ma5)
+23:35:06.130 [t19436] Load: api->init (sr=48000)
+23:35:06.154 [t19436] Load: api->load_voice_bank dir=D:\working\vscode-projects\YM2163-Midi\Denjhang_Music_Player_v16\ma2play\bin\voice\ymf825_ma3\
+23:35:06.194 [t19436] Load: api->load mmf
+23:35:06.332 [t19436] Load: OK (length=43064 ms)
+23:35:06.337 [t19436] SetLengthMs(43348)
+23:35:06.369 [t12588] SetLengthMs(85356)
+23:35:06.375 [t12588] Start: ctx=0000000002a40590 inLoad=0 playing=0
+23:35:06.377 [t12588] Start: api->start
+23:35:06.383 [t12588] Start: smaf_audio_output_winmm.init
+23:35:06.415 [t12588] Start: launch PumpThread
+23:35:06.418 [t12588] Start: OK
+23:35:06.424 [t19884] PumpThread: start (ctx=0000000002a40590)
+23:35:07.100 [t19884] PumpThread: 50 pumps, 48000 frames, 1000 ms
+23:35:08.110 [t19884] PumpThread: 100 pumps, 96000 frames, 2000 ms
+23:36:40.974 [t20988] Stop: playing=0 ctx=0000000000000000
+23:36:40.977 [t20988] Stop: done
+23:36:41.003 [t15636] Load: bin_dir=D:\working\vscode-projects\YM2163-Midi\Denjhang_Music_Player_v16\ma2play\bin mmf_size=10775
+23:36:41.008 [t15636] Stop: playing=0 ctx=0000000000000000
+23:36:41.010 [t15636] Stop: done
+23:36:41.019 [t15636] Load: MA-5 → using MA5_API (libymf825_ma5)
+23:36:41.022 [t15636] Load: api->init (sr=48000)
+23:36:41.047 [t15636] Load: api->load_voice_bank dir=D:\working\vscode-projects\YM2163-Midi\Denjhang_Music_Player_v16\ma2play\bin\voice\ymf825_ma3\
+23:36:41.086 [t15636] Load: api->load mmf
+23:36:41.307 [t15636] Load: OK (length=43064 ms)
+23:36:41.311 [t15636] SetLengthMs(43348)
+23:36:41.361 [t20988] SetLengthMs(85356)
+23:36:41.366 [t20988] Start: ctx=000000000262a6d0 inLoad=0 playing=0
+23:36:41.370 [t20988] Start: api->start
+23:36:41.378 [t20988] Start: smaf_audio_output_winmm.init
+23:36:42.495 [t20988] Start: launch PumpThread
+23:36:42.499 [t20988] Start: OK
+23:36:42.506 [t15044] PumpThread: start (ctx=000000000262a6d0)
+23:36:43.161 [t15044] PumpThread: 50 pumps, 48000 frames, 1000 ms
+23:36:44.185 [t15044] PumpThread: 100 pumps, 96000 frames, 2000 ms
+23:36:45.173 [t15044] PumpThread: 150 pumps, 144000 frames, 3000 ms
+23:36:46.196 [t15044] PumpThread: 200 pumps, 192000 frames, 4000 ms
+23:36:47.180 [t15044] PumpThread: 250 pumps, 240000 frames, 5000 ms
+23:36:48.205 [t15044] PumpThread: 300 pumps, 288000 frames, 6000 ms
+23:36:49.188 [t15044] PumpThread: 350 pumps, 336000 frames, 7000 ms
+23:36:50.195 [t15044] PumpThread: 400 pumps, 384000 frames, 8000 ms
+23:36:51.191 [t15044] PumpThread: 450 pumps, 432000 frames, 9000 ms
+23:36:52.171 [t15044] PumpThread: 500 pumps, 480000 frames, 10000 ms
+23:36:53.199 [t15044] PumpThread: 550 pumps, 528000 frames, 11000 ms
+23:36:54.193 [t15044] PumpThread: 600 pumps, 576000 frames, 12000 ms
+23:36:55.189 [t15044] PumpThread: 650 pumps, 624000 frames, 13000 ms
+23:36:56.186 [t15044] PumpThread: 700 pumps, 672000 frames, 14000 ms
+23:36:57.214 [t15044] PumpThread: 750 pumps, 720000 frames, 15000 ms
+23:36:58.196 [t15044] PumpThread: 800 pumps, 768000 frames, 16000 ms
+23:36:59.176 [t15044] PumpThread: 850 pumps, 816000 frames, 17000 ms
+23:37:00.196 [t15044] PumpThread: 900 pumps, 864000 frames, 18000 ms
+23:37:01.181 [t15044] PumpThread: 950 pumps, 912000 frames, 19000 ms
+23:37:02.199 [t15044] PumpThread: 1000 pumps, 960000 frames, 20000 ms
+23:37:03.182 [t15044] PumpThread: 1050 pumps, 1008000 frames, 21000 ms
+23:37:04.210 [t15044] PumpThread: 1100 pumps, 1056000 frames, 22000 ms
+23:37:05.180 [t15044] PumpThread: 1150 pumps, 1104000 frames, 23000 ms
+23:37:06.208 [t15044] PumpThread: 1200 pumps, 1152000 frames, 24000 ms
+23:37:07.186 [t15044] PumpThread: 1250 pumps, 1200000 frames, 25000 ms
+23:37:08.167 [t15044] PumpThread: 1300 pumps, 1248000 frames, 26000 ms
+23:37:09.185 [t15044] PumpThread: 1350 pumps, 1296000 frames, 27000 ms
+23:37:10.177 [t15044] PumpThread: 1400 pumps, 1344000 frames, 28000 ms
+23:37:11.200 [t15044] PumpThread: 1450 pumps, 1392000 frames, 29000 ms
+23:37:12.184 [t15044] PumpThread: 1500 pumps, 1440000 frames, 30000 ms
+23:37:13.211 [t15044] PumpThread: 1550 pumps, 1488000 frames, 31000 ms
+23:37:14.209 [t15044] PumpThread: 1600 pumps, 1536000 frames, 32000 ms
+23:37:14.780 [t20988] Stop: playing=1 ctx=000000000262a6d0
+23:37:14.784 [t20988] Stop: joining PumpThread
+23:37:14.796 [t15044] PumpThread: exit (1629 pumps, 1563840 frames)
+23:37:14.800 [t20988] Stop: PumpThread joined
+23:37:14.805 [t20988] Stop: smaf_audio_output_winmm.close
+23:37:14.826 [t20988] Stop: api->free ctx=000000000262a6d0
+23:37:14.828 [t20988] Stop: done
+23:37:17.277 [t20988] Stop: playing=0 ctx=0000000000000000
+23:37:17.281 [t20988] Stop: done
+23:37:17.303 [t11684] Load: bin_dir=D:\working\vscode-projects\YM2163-Midi\Denjhang_Music_Player_v16\ma2play\bin mmf_size=13499
+23:37:17.309 [t11684] Stop: playing=0 ctx=0000000000000000
+23:37:17.310 [t11684] Stop: done
+23:37:17.320 [t11684] Load: MA-5 → using MA5_API (libymf825_ma5)
+23:37:17.324 [t11684] Load: api->init (sr=48000)
+23:37:17.352 [t11684] Load: api->load_voice_bank dir=D:\working\vscode-projects\YM2163-Midi\Denjhang_Music_Player_v16\ma2play\bin\voice\ymf825_ma3\
+23:37:17.394 [t11684] Load: api->load mmf
+23:37:17.699 [t11684] Load: OK (length=28448 ms)
+23:37:17.702 [t11684] SetLengthMs(27944)
+23:37:17.742 [t20988] SetLengthMs(54752)
+23:37:17.748 [t20988] Start: ctx=000000000262a6d0 inLoad=0 playing=0
+23:37:17.750 [t20988] Start: api->start
+23:37:17.754 [t20988] Start: smaf_audio_output_winmm.init
+23:37:17.785 [t20988] Start: launch PumpThread
+23:37:17.789 [t20988] Start: OK
+23:37:17.795 [t19648] PumpThread: start (ctx=000000000262a6d0)
+23:37:18.536 [t19648] PumpThread: 50 pumps, 48000 frames, 1000 ms
+23:37:19.543 [t19648] PumpThread: 100 pumps, 96000 frames, 2000 ms
+23:37:20.524 [t19648] PumpThread: 150 pumps, 144000 frames, 3000 ms
+23:37:21.544 [t19648] PumpThread: 200 pumps, 192000 frames, 4000 ms
+23:37:22.535 [t19648] PumpThread: 250 pumps, 240000 frames, 5000 ms
+23:37:23.559 [t19648] PumpThread: 300 pumps, 288000 frames, 6000 ms
+23:37:24.546 [t19648] PumpThread: 350 pumps, 336000 frames, 7000 ms
+23:37:25.568 [t19648] PumpThread: 400 pumps, 384000 frames, 8000 ms
+23:37:26.552 [t19648] PumpThread: 450 pumps, 432000 frames, 9000 ms
+23:37:27.535 [t19648] PumpThread: 500 pumps, 480000 frames, 10000 ms
+23:37:28.547 [t19648] PumpThread: 550 pumps, 528000 frames, 11000 ms
+23:37:29.414 [t20988] Stop: playing=1 ctx=000000000262a6d0
+23:37:29.418 [t20988] Stop: joining PumpThread
+23:37:29.431 [t19648] PumpThread: exit (594 pumps, 570240 frames)
+23:37:29.436 [t20988] Stop: PumpThread joined
+23:37:29.443 [t20988] Stop: smaf_audio_output_winmm.close
+23:37:29.460 [t20988] Stop: api->free ctx=000000000262a6d0
+23:37:29.462 [t20988] Stop: done
+23:37:29.476 [t17908] Load: bin_dir=D:\working\vscode-projects\YM2163-Midi\Denjhang_Music_Player_v16\ma2play\bin mmf_size=14149
+23:37:29.480 [t17908] Stop: playing=0 ctx=0000000000000000
+23:37:29.482 [t17908] Stop: done
+23:37:29.491 [t17908] Load: MA-5 → using MA5_API (libymf825_ma5)
+23:37:29.494 [t17908] Load: api->init (sr=48000)
+23:37:29.520 [t17908] Load: api->load_voice_bank dir=D:\working\vscode-projects\YM2163-Midi\Denjhang_Music_Player_v16\ma2play\bin\voice\ymf825_ma3\
+23:37:29.565 [t17908] Load: api->load mmf
+23:37:29.723 [t17908] Load: OK (length=7152 ms)
+23:37:29.727 [t17908] SetLengthMs(6652)
+23:37:29.766 [t20988] SetLengthMs(13552)
+23:37:29.771 [t20988] Start: ctx=000000000262a7c0 inLoad=0 playing=0
+23:37:29.774 [t20988] Start: api->start
+23:37:29.781 [t20988] Start: smaf_audio_output_winmm.init
+23:37:29.818 [t20988] Start: launch PumpThread
+23:37:29.822 [t20988] Start: OK
+23:37:29.828 [t1020] PumpThread: start (ctx=000000000262a7c0)
+23:37:30.504 [t1020] PumpThread: 50 pumps, 48000 frames, 1000 ms
+23:37:31.512 [t1020] PumpThread: 100 pumps, 96000 frames, 2000 ms
+23:37:32.034 [t20988] Stop: playing=1 ctx=000000000262a7c0
+23:37:32.038 [t20988] Stop: joining PumpThread
+23:37:32.051 [t1020] PumpThread: exit (126 pumps, 120960 frames)
+23:37:32.056 [t20988] Stop: PumpThread joined
+23:37:32.062 [t20988] Stop: smaf_audio_output_winmm.close
+23:37:32.074 [t20988] Stop: api->free ctx=000000000262a7c0
+23:37:32.080 [t20988] Stop: done
+23:37:32.092 [t8500] Load: bin_dir=D:\working\vscode-projects\YM2163-Midi\Denjhang_Music_Player_v16\ma2play\bin mmf_size=10775
+23:37:32.097 [t8500] Stop: playing=0 ctx=0000000000000000
+23:37:32.100 [t8500] Stop: done
+23:37:32.104 [t8500] Load: MA-5 → using MA5_API (libymf825_ma5)
+23:37:32.110 [t8500] Load: api->init (sr=48000)
+23:37:32.133 [t8500] Load: api->load_voice_bank dir=D:\working\vscode-projects\YM2163-Midi\Denjhang_Music_Player_v16\ma2play\bin\voice\ymf825_ma3\
+23:37:32.173 [t8500] Load: api->load mmf
+23:37:32.303 [t8500] Load: OK (length=43064 ms)
+23:37:32.306 [t8500] SetLengthMs(43348)
+23:37:32.343 [t20988] SetLengthMs(85356)
+23:37:32.348 [t20988] Start: ctx=000000000268c230 inLoad=0 playing=0
+23:37:32.351 [t20988] Start: api->start
+23:37:32.355 [t20988] Start: smaf_audio_output_winmm.init
+23:37:32.384 [t20988] Start: launch PumpThread
+23:37:32.389 [t20988] Start: OK
+23:37:32.394 [t19108] PumpThread: start (ctx=000000000268c230)
+23:37:33.076 [t19108] PumpThread: 50 pumps, 48000 frames, 1000 ms
+23:37:33.902 [t20988] Stop: playing=1 ctx=000000000268c230
+23:37:33.908 [t20988] Stop: joining PumpThread
+23:37:33.919 [t19108] PumpThread: exit (90 pumps, 86400 frames)
+23:37:33.924 [t20988] Stop: PumpThread joined
+23:37:33.932 [t20988] Stop: smaf_audio_output_winmm.close
+23:37:33.948 [t20988] Stop: api->free ctx=000000000268c230
+23:37:33.951 [t20988] Stop: done
+23:37:33.965 [t11880] Load: bin_dir=D:\working\vscode-projects\YM2163-Midi\Denjhang_Music_Player_v16\ma2play\bin mmf_size=10221
+23:37:33.971 [t11880] Stop: playing=0 ctx=0000000000000000
+23:37:33.977 [t11880] Stop: done
+23:37:33.984 [t11880] Load: MA-5 → using MA5_API (libymf825_ma5)
+23:37:33.987 [t11880] Load: api->init (sr=48000)
+23:37:34.013 [t11880] Load: api->load_voice_bank dir=D:\working\vscode-projects\YM2163-Midi\Denjhang_Music_Player_v16\ma2play\bin\voice\ymf825_ma3\
+23:37:34.054 [t11880] Load: api->load mmf
+23:37:34.309 [t11880] Load: OK (length=26276 ms)
+23:37:34.312 [t11880] SetLengthMs(25776)
+23:37:34.350 [t20988] SetLengthMs(50276)
+23:37:34.354 [t20988] Start: ctx=000000000262a7c0 inLoad=0 playing=0
+23:37:34.357 [t20988] Start: api->start
+23:37:34.363 [t20988] Start: smaf_audio_output_winmm.init
+23:37:34.393 [t20988] Start: launch PumpThread
+23:37:34.397 [t20988] Start: OK
+23:37:34.403 [t1444] PumpThread: start (ctx=000000000262a7c0)
+23:37:35.150 [t1444] PumpThread: 50 pumps, 48000 frames, 1000 ms
+23:37:36.174 [t1444] PumpThread: 100 pumps, 96000 frames, 2000 ms
+23:37:37.161 [t1444] PumpThread: 150 pumps, 144000 frames, 3000 ms
+23:37:38.173 [t1444] PumpThread: 200 pumps, 192000 frames, 4000 ms
+23:37:39.169 [t1444] PumpThread: 250 pumps, 240000 frames, 5000 ms
+23:37:40.185 [t1444] PumpThread: 300 pumps, 288000 frames, 6000 ms
+23:37:41.171 [t1444] PumpThread: 350 pumps, 336000 frames, 7000 ms
+23:37:41.943 [t20988] Stop: playing=1 ctx=000000000262a7c0
+23:37:41.948 [t20988] Stop: joining PumpThread
+23:37:41.953 [t1444] PumpThread: exit (389 pumps, 373440 frames)
+23:37:41.957 [t20988] Stop: PumpThread joined
+23:37:41.964 [t20988] Stop: smaf_audio_output_winmm.close
+23:37:41.980 [t20988] Stop: api->free ctx=000000000262a7c0
+23:37:41.983 [t20988] Stop: done
+23:37:41.997 [t10652] Load: bin_dir=D:\working\vscode-projects\YM2163-Midi\Denjhang_Music_Player_v16\ma2play\bin mmf_size=39857
+23:37:42.002 [t10652] Stop: playing=0 ctx=0000000000000000
+23:37:42.005 [t10652] Stop: done
+23:37:42.013 [t10652] Load: MA-5 → using MA5_API (libymf825_ma5)
+23:37:42.017 [t10652] Load: api->init (sr=48000)
+23:37:42.044 [t10652] Load: api->load_voice_bank dir=D:\working\vscode-projects\YM2163-Midi\Denjhang_Music_Player_v16\ma2play\bin\voice\ymf825_ma3\
+23:37:42.090 [t10652] Load: api->load mmf
+23:37:42.329 [t10652] Load: OK (length=23968 ms)
+23:37:42.332 [t10652] SetLengthMs(23836)
+23:37:42.371 [t20988] SetLengthMs(47024)
+23:37:42.379 [t20988] Start: ctx=000000000268c230 inLoad=0 playing=0
+23:37:42.381 [t20988] Start: api->start
+23:37:42.387 [t20988] Start: smaf_audio_output_winmm.init
+23:37:42.416 [t20988] Start: launch PumpThread
+23:37:42.419 [t20988] Start: OK
+23:37:42.425 [t8164] PumpThread: start (ctx=000000000268c230)
+23:37:43.086 [t8164] PumpThread: 50 pumps, 48000 frames, 1000 ms
+23:37:44.090 [t8164] PumpThread: 100 pumps, 96000 frames, 2000 ms
+23:37:45.075 [t8164] PumpThread: 150 pumps, 144000 frames, 3000 ms
+23:37:46.098 [t8164] PumpThread: 200 pumps, 192000 frames, 4000 ms
+23:37:47.088 [t8164] PumpThread: 250 pumps, 240000 frames, 5000 ms
+23:37:48.099 [t8164] PumpThread: 300 pumps, 288000 frames, 6000 ms
+23:37:49.078 [t8164] PumpThread: 350 pumps, 336000 frames, 7000 ms
+23:37:50.113 [t8164] PumpThread: 400 pumps, 384000 frames, 8000 ms
+23:37:51.094 [t8164] PumpThread: 450 pumps, 432000 frames, 9000 ms
+23:37:52.082 [t8164] PumpThread: 500 pumps, 480000 frames, 10000 ms
+23:37:53.095 [t8164] PumpThread: 550 pumps, 528000 frames, 11000 ms
+23:37:54.075 [t8164] PumpThread: 600 pumps, 576000 frames, 12000 ms
+23:37:55.107 [t8164] PumpThread: 650 pumps, 624000 frames, 13000 ms
+23:37:56.095 [t8164] PumpThread: 700 pumps, 672000 frames, 14000 ms

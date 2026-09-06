@@ -1,0 +1,28 @@
+# GitHub Pages 部署：纯静态（wasm/曲库/索引均已入库，无需 CI 构建）
+name: Deploy to Pages
+on:
+  push:
+    branches: [main]
+    paths: [web/**, .github/workflows/pages.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+      - id: deployment
+        uses: actions/deploy-pages@v4
