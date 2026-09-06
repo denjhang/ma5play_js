@@ -194,3 +194,13 @@ node switch_test.mjs                # 连播四曲
 - README 已重写为开源项目形态（英文，特性/Quick start/架构/验证/Roadmap）。
 - LICENSE = MIT + 第三方说明（Yamaha DLL 仿真/资产按原条款，ref/ 为参考副本）。
 - 发布流程：构建(-O1) → prepare.sh → package.sh [ver] → git tag。
+
+## GitHub Pages 部署（0530c3a）
+
+- **全曲库内置**：web/assets/tracks/ = bin/mmf 全量复制（1484 首/34MB，入库）；
+  web/mktracks.mjs 生成 tracks.json 静态索引（改曲库后重跑 + git add web/assets）。
+- **静态模式**：/api 不可用（Pages/纯静态托管）时浏览器自动用 tracks.json +
+  直链 assets/tracks/<relpath>；dev（http + server.mjs）仍走 /api。
+- .github/workflows/pages.yml：push main → 部署 web/（资产入库零 CI 构建），
+  仓库 Settings → Pages → Source: GitHub Actions 启用一次。
+- .gitignore 已解除 web/assets/（wasm/data/预载/图标/曲库全入库）。
