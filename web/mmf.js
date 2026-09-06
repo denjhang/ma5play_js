@@ -240,15 +240,7 @@ function parseTrack(u8, off, size, chBase, out) {
   out.gateTb = TIMEBASE[u8[off + 3]] ?? 2;
   let p = off + 4;
   const end = off + size;
-  const stBytes = fmt === 0 ? 2 : (fmt === 3 ? 32 : 16);
-  // 通道类型（kChTypeNames: NoCare/Melody/NoMel/Rhythm）——HPS 2 字节打包 / 其余每通道 1 字节
-  if (fmt === 0) {
-    const b = (u8[off + 4] << 8) | u8[off + 5];
-    for (let c = 0; c < 4; c++) { out.chTypes[chBase + c] = (b >> (12 - c * 4)) & 3; }
-  } else {
-    for (let c = 0; c < stBytes && c < 32; c++) out.chTypes[chBase + c] = u8[off + 4 + c] & 3;
-  }
-  p += stBytes;   // 通道状态区
+  p += fmt === 0 ? 2 : (fmt === 3 ? 32 : 16);   // 通道状态区
   while (p + 8 <= end) {
     const sig = u32(u8, p), csz = u32(u8, p + 4);
     p += 8;
@@ -366,13 +358,12 @@ export function parseMMF(buf) {
   let p = 8;
   const end = u8.length - 2;                    // 尾部 CRC
   let trackIdx = 0;
-  const out1 = { ...out, notes: [], excls: [], tracks: [], chEv: [], waves: [], voices: [], chTypes: new Array(32).fill(-1), atrCount: 0, durTb: 2, gateTb: 2, durMs: 0 };
+  const out1 = { ...out, notes: [], excls: [], tracks: [], chEv: [], waves: [], voices: [], durTb: 2, gateTb: 2, durMs: 0 };
   while (p + 8 <= end) {
     const sig = u32(u8, p), csz = u32(u8, p + 4);
     p += 8;
     if (p + csz > end) break;
     if (sig === SIG.CNTI) parseCntiTitle(u8, p, csz, out1);
-    else if ((sig & 0xFFFFFF00) === 0x41545200) out1.atrCount++;   // "ATR*" ADPCM 音轨
     else if ((sig & 0xFFFFFF00) === SIG.MTR) {
       const fmt = u8[p];
       const chBase = (fmt === 0) ? trackIdx * 4 : 0;   // HPS 多轨：全局通道 = c + t*4
