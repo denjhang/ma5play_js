@@ -369,3 +369,35 @@ smaf_window.cpp Render() 确认真实布局并复刻：
   wasm 960 却掉到 0.5x，矛盾点在每次 pump_seq/pump_audio 调用的固定开销
   （960 块 = 2.5 倍调用次数）。待逆向窗口定位每泵固定成本后回传参数/结论。
 - bench_ma2.mjs 已参数化（node bench_ma2.mjs <chunk>）。
+
+## 2026-09-06（深夜·第二轮）— 可视化对齐 ma2play 825 核心
+
+### 解析器 bit 级对齐（1484/1484）
+- `ref/` 建立三版 libymf825（ma2/ma3/ma5）源码副本 + voice 资产（DefMA3 ini、
+  rom_wave_source.bin）+ midifile，本地 g++ 编译出 count_events / dump_events /
+  test_vis_slots / test_vis5（ma5 版）基准工具。dmplayer 仓库零改动。
+- A/B 对拍（C++ 全语料 TSV vs JS）揪出五处偏差并修复（5ff7b41）：
+  1. evMobile 0x8X Note-Off 是 NOTE 事件（vel 继承 g_lastVelocity）——
+     丢 ~80% 音符根因（sekai ni hana 507→2582 与 C++ 一致）
+  2. fmt=1 Huffman 解压后未分发 evMobile（整曲 0 事件）
+  3. MMMG 容器内 SEQU 未解析 + 时基取 MMMG 头字节
+  4. evSequ 对照 create_event_sequ 逐分支重写（0x01-0x3B）+ 0xF0 漏 rest-- 越界
+  5. evHps 补 type2 短格式表（SHORT_MOD/SHORT_EXP）/ bank=CC#32 / modulation
+- 结论：全语料 1484 文件 notes/cc/pc/pb 总量 + 每通道音符数与 C++ 完全一致。
+
+### noteOn 路由模型（bec00b2）
+- routeNotes 静态预标记：fm / drum / ext / stream（时间轴重放通道 bank 状态；
+  MA-5 默认 ch9=125、其余 124，同 C++ noteOn）。
+- 用户裁定：**MA-5 鼓 = MA-3 同款 ROM 鼓 PCM**（bankMSB>=125；ymf825 关闭
+  MA-5 鼓只是逆向未完成）。
+- ext 行真键 waveID：MA-5 长格式（43 79 07 7F 01）vp=原始 16 字节取 d[25]；
+  MA-3 为 7bit 打包 vp[15]。与 test_vis_slots 日志对拍一致。
+- stream：MA-5 note < Mwa 条数（mwaStreams[note]，任意通道）。
+- UI：MIDI 行只挂 FM 音符；P0-7=鼓键去重；WAVE=e<waveID>/s<idx>/m<idx>；
+  分组标题（MIDI/ATR/PCM ROM Drums/WAVE）；单曲目内全表粘滞不复位。
+- 已知边界：MA-3 mwa 行（drum-RAM 例外需 ini preset 表）用播放期常亮兜底，
+  AudioWorklet 核心快照后消除。
+
+### 其他
+- 分阶段载入进度条（五阶段权重 + 原子阶段时间曲线 + 流光，0bb67ae）。
+- 发布：README 重写为开源项目形态 + LICENSE + dist 打包脚本。
