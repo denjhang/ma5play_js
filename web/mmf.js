@@ -301,21 +301,47 @@ function parseTrack(u8, off, size, chBase, out) {
 }
 /* SysEx 全类型细分（ymf825emu parse_exclusive 同款语义）：
  * 声音注册（voices）+ 波形数据（waves） */
+/* 7bit 打包参数解码（C++ decode7bit 同律）：每 8 字节组 = 1 个 msb 位图 + 7 个数据字节 */
+function decode7bit(u8, off, len) {
+  const out = [];
+  let p = off, count = len;
+  while (count > 0) {
+    const chunk = Math.min(count, 8);
+    const msb = u8[p++];
+    for (let i = 0; i < chunk - 1; i++) {
+      const bit = (msb >> (6 - i)) & 1;
+      out.push((bit << 7) | u8[p++]);
+    }
+    count -= chunk;
+  }
+  return out;
+}
+/* voice 包的 waveID（vp[15]，C++ 同）：ext 行 GUI 槽位的稳定标识 */
+function voiceWaveId7bit(d, off, len) {
+  const vp = decode7bit(d, off, len);
+  return vp.length >= 16 ? (vp[15] & 0x7F) : undefined;
+}
 function scanExclusives(excls, out) {
   for (const d of excls) {
     const L = d.length;
-    if (L >= 10 && d[0] === 0x43 && d[1] === 0x79 && d[2] === 0x07 && d[3] === 0x7F && d[4] === 0x01)
-      out.voices.push({ kind: 'MA-5 Voice', bankM: d[5], bankL: d[6], pc: d[7], drum: d[8], vtype: d[9] === 0 ? 'FM' : 'PCM' });
-    else if (L >= 10 && d[0] === 0x43 && d[1] === 0x79 && d[2] === 0x06 && d[3] === 0x7F && d[4] === 0x01)
-      out.voices.push({ kind: 'MA-3 Voice', bankM: d[5], bankL: d[6], pc: d[7], drum: d[8], vtype: (d[9] & 1) ? 'WaveTable' : 'FM' });
+    if (L >= 10 && d[0] === 0x43 && d[1] === 0x79 && d[2] === 0x07 && d[3] === 0x7F && d[4] === 0x01) {
+      const drum = d[8];
+      out.voices.push({ kind: 'MA-5 Voice', bankM: drum !== 0 ? 125 : d[5], bankL: d[6], pc: d[7], drum, vtype: d[9] === 0 ? 'FM' : 'PCM',
+        waveID: d[9] !== 0 && L >= 26 ? d[25] & 0x7F : undefined });   // 长格式 vp=d[10..25] 原始 16 字节
+    }
+    else if (L >= 10 && d[0] === 0x43 && d[1] === 0x79 && d[2] === 0x06 && d[3] === 0x7F && d[4] === 0x01) {
+      const wave = (d[9] & 1) !== 0;
+      out.voices.push({ kind: 'MA-3 Voice', bankM: d[5], bankL: d[6], pc: d[7], drum: d[8], vtype: wave ? 'WaveTable' : 'FM',
+        waveID: wave && d[5] === 124 ? voiceWaveId7bit(d, 10, L - 10) : undefined });
+    }
     else if (L >= 6 && d[0] === 0x43 && d[1] === 0x79 && d[2] === 0x07 && d[3] === 0x7F && d[4] === 0x03)
       out.waves.push({ kind: 'MA-5 PCM waveform (ext)', form: '7F03', id: d[5], size: L - 6 });
     else if (L >= 6 && d[0] === 0x43 && d[1] === 0x79 && d[2] === 0x06 && d[3] === 0x7F && d[4] === 0x03)
       out.waves.push({ kind: 'MA-3 PCM waveform', id: d[5], size: L - 6 });
     else if (L >= 5 && d[0] === 0x43 && d[1] === 0x05 && d[2] === 0x01)
       out.voices.push({ kind: 'MA-5 FM Voice', bankL: d[3], pc: d[4], vtype: 'FM' });
-    else if (L >= 5 && d[0] === 0x43 && d[1] === 0x05 && d[2] === 0x02)
-      out.voices.push({ kind: 'MA-5 PCM Voice', bankL: d[3], pc: d[4], drum: (d[3] & 0x80) !== 0, vtype: 'PCM' });
+    else if (L >= 21 && d[0] === 0x43 && d[1] === 0x05 && d[2] === 0x02)   // 43 05 02：d[5..20] 16 字节原始参数
+      out.voices.push({ kind: 'MA-5 PCM Voice', bankM: (d[3] & 0x80) !== 0 ? 125 : 0, bankL: d[3] & 0x7F, pc: d[4], drum: (d[3] & 0x80) !== 0 ? 0 : undefined, vtype: 'PCM', waveID: d[20] & 0x7F });
     else if (L >= 4 && d[0] === 0x43 && d[1] === 0x05 && d[2] === 0x00)
       out.waves.push({ kind: 'MA-5 Wave data', form: '0500', id: d[3], size: L - 4 });
     else if (L >= 5 && d[0] === 0x43 && d[1] === 0x04 && d[2] === 0x01)

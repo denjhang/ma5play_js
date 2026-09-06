@@ -433,12 +433,63 @@ function buildChGrid() {
   $('chTable').innerHTML = `<colgroup><col style="width:9%"><col style="width:34%"><col style="width:17%"><col style="width:8%"><col style="width:9%"><col style="width:8%"><col style="width:15%"></colgroup><thead><tr><th>Ch</th><th>Prog</th><th>Note</th><th>Vol</th><th>Pan</th><th>Exp</th><th>Event</th></tr></thead>`;
   chVis.chans = Array.from({ length: 16 }, () => ({ ev: [], notes: [], ei: 0, pc: -1, vol: 100, pan: 64, exp: 127, last: '--', act: false, used: false, progShown: '' }));
 }
+/* ---------------- 静态路由（smaf_sequencer noteOn 决策树移植）----------------
+ * MA-3 与 MA-5 同模型（用户裁定：MA-5 也走 ROM 鼓 PCM，逆向未完不是不做的理由）：
+ *  - bankMSB>=125 = 鼓通道 → PCM ROM 鼓（P 行）
+ *  - MA-5: note < Mwa 条数 = 流触发（C++ mwaStreams[note]）→ s 行
+ *  - bankMSB=124 + PCM 音色 (bankL,pc) 命中 → ext 波（e<waveID> 行）
+ *  - 其余 → FM（MIDI 行）
+ * 音色表带 waveID（mmf.js 从 voice 包 vp[15] 解出，与 C++ 对拍一致）。 */
+function routeNotes(meta) {
+  const ma = meta?.version ?? 0;
+  const notes = (meta?.notes ?? []).slice().sort((a, b) => a.t - b.t);
+  const chEv = (meta?.chEv ?? []).slice().sort((a, b) => a.t - b.t);
+  const melV = new Map();     // 'bankL:pc' → 旋律 PCM 音色（C++ 只比 bankLSB+pc）
+  const drumV = new Map();    // 'bankL' → Set(drumNote)
+  const voiceList = [];
+  (meta?.voices ?? []).forEach(v => {
+    if (!v.vtype || v.vtype === 'FM' || v.pc === undefined) return;
+    const rec = { ...v, idx: voiceList.length };
+    voiceList.push(rec);
+    const isDrum = (v.bankM ?? 0) >= 125 || (v.drum ?? 0) > 0;
+    if (isDrum) {
+      const k = String(v.bankL ?? 0);
+      if (!drumV.has(k)) drumV.set(k, new Set());
+      if (v.drum > 0) drumV.get(k).add(v.drum);
+    } else if (!melV.has((v.bankL ?? 0) + ':' + v.pc)) {
+      melV.set((v.bankL ?? 0) + ':' + v.pc, rec);
+    }
+  });
+  const nMwa = (meta?.waves ?? []).filter(w => w.src === 'Mwa').length;
+  const st = Array.from({ length: 16 }, () => ({ bM: 0, bL: 0, pc: -1 }));
+  if (ma >= 5) for (let c = 0; c < 16; c++) st[c].bM = c === 9 ? 125 : 124;   // C++ noteOn MA-5 默认
+  let ei = 0;
+  for (const n of notes) {
+    while (ei < chEv.length && chEv[ei].t <= n.t) {
+      const e = chEv[ei++]; const s = st[e.ch]; if (!s) continue;
+      if (e.k === 'PC') s.pc = e.pc;
+      else if (e.k === 'CC' && e.cc === 0) s.bM = e.v;
+      else if (e.k === 'CC' && e.cc === 32) s.bL = e.v;
+    }
+    const s = st[n.ch] ?? { bM: 0, bL: 0, pc: -1 };
+    if (ma >= 5 && nMwa > 0 && n.note >= 0 && n.note < nMwa) { n.route = 'stream'; n.slot = n.note; continue; }  // C++ mwaStreams[note]，任意通道
+    if (s.bM >= 125) { n.route = 'drum'; continue; }                          // ROM 鼓（MA-3/MA-5 同）
+    if (s.bM === 124) {
+      const v = melV.get((s.bL ?? 0) + ':' + (s.pc ?? -1));
+      if (v) { n.route = 'ext'; n.voice = v; continue; }
+    }
+    n.route = 'fm';
+  }
+  return { notes, melV, drumV, voiceList, nMwa };
+}
+
 function chOnTrack(meta) {
-  // ma2play 原则：切曲时一次性全扫定型——通道集合、各通道首个乐器/状态
+  // ma2play 原则：切曲时一次性全扫定型——通道集合、路由、各通道首个乐器/状态
   // 预解析；播放期间行数与乐器名（粘性）不再增删重置。
+  chVis.routed = routeNotes(meta);
   for (const c of chVis.chans) { c.ev = []; c.notes = []; c.ei = 0; c.pc = -1; c.vol = 100; c.pan = 64; c.exp = 127; c.last = '--'; c.note = -1; c.lastNote = -1; c.act = false; c.used = false; c.progShown = ''; c.bankM = 0; c.bankL = 0; }
   for (const e of meta?.chEv ?? []) { const c = chVis.chans[e.ch]; if (c) { c.ev.push(e); c.used = true; } }
-  for (const n of meta?.notes ?? []) { const c = chVis.chans[n.ch]; if (c) { c.notes.push(n); c.used = true; } }
+  for (const n of chVis.routed.notes) if (n.route === 'fm') { const c = chVis.chans[n.ch]; if (c) { c.notes.push(n); c.used = true; } }   // MIDI 行只挂 FM 路由音符
   for (const c of chVis.chans) {
     c.ev.sort((a, b) => a.t - b.t); c.notes.sort((a, b) => a.t - b.t);
     // 全扫：取首个 PC/CC 作为初始显示（粘性起点，不等时间轴到达）
@@ -475,30 +526,15 @@ function chOnTrack(meta) {
   log(`[vis] parsed: ${nNotes} notes, ch=[${usedCh.join(',')}], span 0→${last.toFixed(2)}s (dur ${(meta?.durationMs / 1000 || 0).toFixed(1)}s)`);
   if (!nNotes) log('[vis] ⚠ no notes parsed (compressed/SEQU format not supported for piano)');
 }
-/* 非 MIDI 通道行（ma2play 同款设计，parser 静态数据源）：
- * MA-2 = ATR0/1（ADPCM 音轨）；MA-3 = P0-7（ROM 鼓）+ wave 行；
- * MA-5 = wave 行。wave 行 Ch 标签 e<id>/m<idx>（ext=m<waveID>, mwa=m<idx>），
- * 来源标签 ext/mwa，配色照抄（ext 青 / mwa 紫 / stream 橙 / ATR 琥珀）。 */
+/* 非 MIDI 通道行（ma2play MwaSlot/PCM 行同款，路由数据源）：
+ * MA-2 = ATR0/1；MA-3/5 = P0-7（ROM 鼓）+ WAVE 行（ext=e<waveID> 按 PCM 音色一行、
+ * stream=s<idx> MA-5 流、mwa=m<idx> MA-3 drum-RAM）。配色照抄 ma2play。 */
 const ROW_COLORS = { atr: 'rgb(230,179,77)', ext: 'rgb(79,199,230)', mwa: 'rgb(217,140,230)', stream: 'rgb(230,171,79)' };
 /* PCM 行 8 色板（ma2play kPcmRowCol，与音量条同色系） */
 const PCM_ROW_COLORS = ['rgb(120,230,181)', 'rgb(181,140,240)', 'rgb(240,140,181)', 'rgb(140,219,240)', 'rgb(219,199,120)', 'rgb(181,240,140)', 'rgb(240,161,219)', 'rgb(161,199,219)'];
 function buildNonMidiRows(body, meta, addGroup) {
   chVis.extra = [];
-  // PCM 音色 drum 键表：(bankL:pc) -> Set(drum)——MA-5 鼓行与流区分的依据
-  chVis.drumKeys = new Map();
-  for (const v of meta?.voices ?? []) {
-    if (v.vtype === 'FM' || v.vtype == null || v.pc === undefined) continue;
-    const k = (v.bankL ?? 0) + ':' + v.pc;
-    if (!chVis.drumKeys.has(k)) chVis.drumKeys.set(k, new Set());
-    if (v.drum != null) chVis.drumKeys.get(k).add(v.drum);
-  }
-  // 通道最终 bank/pc 映射（MA-5 鼓行枚举 + mwa 兜底判定共用）
-  chVis.chBankFinal = {};
-  for (const e of meta?.chEv ?? []) {
-    if (e.k === 'PC') (chVis.chBankFinal[e.ch] ??= {}).pc = e.pc;
-    else if (e.k === 'CC' && e.cc === 0) (chVis.chBankFinal[e.ch] ??= {}).bankM = e.v;
-    else if (e.k === 'CC' && e.cc === 32) (chVis.chBankFinal[e.ch] ??= {}).bankL = e.v;
-  }
+  const { notes, voiceList, nMwa } = chVis.routed;
   const addRow = (id, label, color, cells, desc) => {
     const tr = document.createElement('tr');
     tr.id = 'xrow-' + id;
@@ -508,10 +544,10 @@ function buildNonMidiRows(body, meta, addGroup) {
     body.appendChild(tr);
     tr.dataset.baseEvt = cells.evt ?? '--';
     tr.children[2].dataset.baseNote = cells.note ?? '--';
-    chVis.extra.push({ id, ...desc, tr, noteShown: '' });
+    chVis.extra.push({ id, ...desc, tr, noteShown: '', evtShown: '' });
   };
   const ma = meta?.version ?? 0;
-  // ATR 行：showAtrRows = !(MA>=3)——MA-2 恒显两条（ma2play 同款，不按 atrCount）
+  // ATR 行：showAtrRows = !(MA>=3)（ma2play 同款）
   if (ma <= 2) {
     addGroup('ADPCM Tracks (ATR)');
     for (let a = 0; a < 2; a++)
@@ -519,51 +555,38 @@ function buildNonMidiRows(body, meta, addGroup) {
         { prog: 'ADPCM Stream', note: '#' + a, evt: 'adpcm' },
         { kind: 'atr', idx: a, hasData: (meta?.atrCount ?? 0) > a });
   }
-  // PCM 行 P0-7：MA-3 与 MA-5 都用 PCM ROM 鼓（ymf825 因实现不完全关了 MA-5 的，
-  // 实际 MA-5 也走 ROM 鼓）。MA-3 = ch9 音符枚举；MA-5 = bankM=125 通道上
-  // 命中 PCM 音色 drum 键的音符（LG KG920 语料静态验证：36/38/42/49/57/64/70 等 GM 鼓键）
+  // PCM ROM 鼓行 P0-7：MA-3 与 MA-5 同款（route=drum 的音符，按鼓键去重）
   if (ma >= 3) {
-    let drums;
-    if (ma === 3) {
-      drums = [...new Set((meta?.notes ?? []).filter(n => n.ch === 9).map(n => n.note))];
-    } else {
-      drums = (meta?.notes ?? []).filter(n => {
-        const b = chVis.chBankFinal[n.ch];
-        return b?.bankM === 125 && chVis.drumKeys?.get((b.bankL ?? 0) + ':' + b.pc)?.has(n.note);
-      }).map(n => n.note);
-      drums = [...new Set(drums)];
-    }
-    drums = drums.sort((a, b) => a - b).slice(0, 8);
+    const drums = [...new Set(notes.filter(n => n.route === 'drum').map(n => n.note))].sort((a, b) => a - b).slice(0, 8);
     if (drums.length) addGroup('PCM ROM Drums');
     drums.forEach((dn, i) =>
       addRow('pcm' + i, 'P' + i, PCM_ROW_COLORS[i % 8],
         { prog: GM_DRUMS[dn] ?? 'ROM Drum', note: noteName(dn), evt: 'rom' },
         { kind: 'pcm', noteNum: dn }));
   }
-  // WAVE 行（MA≥3，MwaSlot 定型）：ext=e<waveID> / mwa=m<idx>；Note=同类内 #seq
-  if (ma >= 3 && (meta?.waves ?? []).length) {
+  // WAVE 行：ext 按 PCM 音色注册一行（e<waveID>，复音同标签多行省略为单行取最高音）；
+  // MA-5 stream=s<idx>；MA-3 mwa=m<idx>（drum-RAM 兜底：有 Mwa 无路由则播放期常亮）
+  if (ma >= 3 && (voiceList.length || nMwa)) {
     addGroup('WAVE Channels');
-    const seq = { ext: 0, mwa: 0 };
-    meta.waves.slice(0, 10).forEach((w, wi) => {
-      const isMwa = w.src === 'Mwa';
-      const kind = isMwa ? 'mwa' : 'ext';
-      addRow('wave' + wi, isMwa ? 'm' + seq.mwa : 'e' + (w.id ?? 0),
-        ROW_COLORS[kind],
-        { prog: isMwa ? `Mwa ${w.hz / 1000 | 0}kHz${w.stereo ? ' st' : ''}` : 'Inline Wave', note: '#' + (seq[kind]++), evt: kind },
-        { kind: 'wave', src: kind, extIdx: isMwa ? -1 : seq[kind] - 1 });
-    });
-  }
-  // ext 波归因表（LG KG920 语料静态结论）：bankM=124 通道按 (bankL,pc) 命中
-  // PCM 音色（vtype≠FM），PCM 音色注册序 ↔ ext 波 id 序一一对应；
-  // bankM=125/bankL=0 = Mwa 流通道（不走音色匹配）。voice→wave 的精确链接
-  // 在 DLL 内部，此处为注册序近似，AudioWorklet 快照后换核心实时数据。
-  chVis.pcmVoices = new Map();
-  (meta?.voices ?? []).filter(v => v.vtype && v.vtype !== 'FM' && v.pc !== undefined)
-    .forEach((v, i) => { const k = (v.bankL ?? 0) + ':' + v.pc; if (!chVis.pcmVoices.has(k)) chVis.pcmVoices.set(k, i); });
-  // mwa 兜底：全曲无 bankM=125 流音符（触发在 setup SysEx / DLL 内，纯音频/背景垫类，
-  // 语料 79 个文件）→ 播放期常亮，保证不死行
-  chVis.mwaFallback = (meta?.waves ?? []).some(w => w.src === 'Mwa') &&
-    !(meta?.notes ?? []).some(n => chVis.chBankFinal[n.ch]?.bankM === 125);
+    let vi = 0;
+    for (const v of voiceList.slice(0, 10)) {
+      addRow('ext' + vi, 'e' + (v.waveID ?? v.idx), ROW_COLORS.ext,
+        { prog: `PCM b${v.bankL ?? 0}/${v.pc}`, note: '—', evt: 'ext' },
+        { kind: 'wave', src: 'ext', voiceIdx: v.idx });
+      vi++;
+    }
+    if (ma >= 5) for (let i = 0; i < Math.min(nMwa, 4); i++)
+      addRow('str' + i, 's' + i, ROW_COLORS.stream,
+        { prog: 'Mwa Stream', note: 'stream', evt: 'stream' },
+        { kind: 'wave', src: 'stream', slot: i });
+    if (ma === 3 && nMwa > 0)
+      for (let i = 0; i < Math.min(nMwa, 4); i++)
+        addRow('mwa' + i, 'm' + i, ROW_COLORS.mwa,
+          { prog: 'Mwa Drum', note: '#' + i, evt: 'mwa' },
+          { kind: 'wave', src: 'mwa', slot: i });
+    // MA-3 mwa 兜底：路由静态解不出（preset 表在 ini，web 侧未带）→ 播放期常亮
+    chVis.mwaFallback = ma === 3 && nMwa > 0 && !notes.some(n => n.route === 'mwa');
+  } else chVis.mwaFallback = false;
 }
 
 function updateChTable(tSec) {
@@ -599,48 +622,40 @@ function updateChTable(tSec) {
     tds[5].textContent = c.exp;
     tds[6].textContent = c.act ? 'Note' : c.last;
   });
-  updateExtraRows(tSec, activeNotes);
+  updateExtraRows(tSec);
 }
 
-/* 非 MIDI 行播放期更新（parser 静态数据 + bankM/bankL 音符归因，AudioWorklet 快照前的过渡方案）：
- * ATR = 音轨存在且正在播放即激活；PCM P 行 = 对应鼓音正在发声（ch9 非 bankM=125 流通道）；
- * ext wave 行 = bankM=124 通道 (bankL,pc) 命中 PCM 音色（注册序 ↔ ext id 序），各行独立音高；
- * mwa 行 = bankM=125 流通道正在发声（流不按音高触发，Note 显示 stream）。
- * 粘滞铁律：单曲目内所有条目不复位——失活只撤高亮，Note/Event 保留最后值，切曲才重建。 */
-function updateExtraRows(tSec, activeNotes) {
+/* 非 MIDI 行播放期更新（路由数据源：routeNotes 静态预标记每个音符的 route）：
+ * P 行 = route 'drum' 的鼓键正在发声；ext 行 = 该音色的 route 'ext' 音符（各自音高）；
+ * stream/mwa 行 = 对应 slot 正在发声。粘滞铁律：失活只撤高亮，Note/Event 保留。 */
+function updateExtraRows(tSec) {
   if (!chVis.extra?.length) return;
-  const drumHits = new Set();     // MA-5：b125 通道命中 drum 键的音符
-  const drumNotes = new Set();    // MA-3：ch9（非流通道）正在发声的音符
-  // 每个 PCM 音色（voiceIdx）当前发声的最高音；mwa 流通道是否有发声
-  const extAct = new Map();       // voiceIdx -> note
-  let mwaAct = false;
-  for (const a of activeNotes) {
-    const c = chVis.chans[a.ch];
-    if (!c) continue;
-    if (c.bankM === 125) {
-      const dk = chVis.drumKeys?.get((c.bankL ?? 0) + ':' + (c.pc ?? -1));
-      if (dk?.has(a.note)) drumHits.add(a.note);
-      else mwaAct = true;           // 非鼓键的 b125 活动 = Mwa 流
-      continue;
-    }
-    if (a.ch === 9) drumNotes.add(a.note);
-    if (c.bankM !== 124) continue;
-    const vi = chVis.pcmVoices?.get((c.bankL ?? 0) + ':' + (c.pc ?? -1));
-    if (vi === undefined) continue;
-    const prev = extAct.get(vi);
-    if (prev === undefined || a.note > prev) extAct.set(vi, a.note);
+  const drumHit = new Set();
+  const extAct = new Map();       // voiceIdx -> 当前最高音
+  const slotAct = new Set();      // stream/mwa slot
+  const notes = chVis.routed?.notes ?? [];
+  for (const n of notes) {
+    if (n.t > tSec) break;
+    if (n.end <= tSec) continue;
+    if (n.route === 'drum') drumHit.add(n.note);
+    else if (n.route === 'ext') {
+      const p = extAct.get(n.voice.idx);
+      if (p === undefined || n.note > p) extAct.set(n.voice.idx, n.note);
+    } else if (n.route === 'stream' || n.route === 'mwa') slotAct.add(n.slot ?? 0);
   }
   for (const x of chVis.extra) {
     let act = false, noteTxt = null, evt = null;
     if (x.kind === 'atr') { act = x.hasData && S.playing; if (act) evt = 'play'; }
     else if (x.kind === 'pcm') {
-      act = drumHits.has(x.noteNum) || drumNotes.has(x.noteNum);
+      act = drumHit.has(x.noteNum);
       if (act) { noteTxt = noteName(x.noteNum); evt = 'hit'; }
     } else if (x.kind === 'wave') {
-      if (x.src === 'mwa' && (mwaAct || (chVis.mwaFallback && S.playing))) { act = true; noteTxt = 'stream'; evt = 'mwa'; }
-      else if (x.src === 'ext') {
-        const n = extAct.get(x.extIdx);
+      if (x.src === 'ext') {
+        const n = extAct.get(x.voiceIdx);
         if (n !== undefined) { act = true; noteTxt = noteName(n); evt = 'wave'; }
+      } else {
+        act = slotAct.has(x.slot) || (chVis.mwaFallback && S.playing);
+        if (act) { noteTxt = 'stream'; evt = x.src; }
       }
     }
     x.tr.classList.toggle('on', act);
