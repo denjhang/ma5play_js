@@ -24,6 +24,10 @@
 - ✅ 钢琴键盘：ma2play 同款绘制（比例/配色/blend），parser 时间轴，
   多通道同音**水平切分**各通道色；手机两行
 - ✅ 通道表：ma2play 分版本设计（详见下"通道表设计"）
+- ✅ 通道表分组标题（MIDI Channels / ADPCM Tracks (ATR) / PCM ROM Drums /
+  WAVE Channels）+ 非 MIDI 行播放期更新：ATR=atrCount+播放态、PCM 鼓行=
+  ch9 鼓音符触发、ext wave 行=通道 (bankL,pc) 命中非 FM 音色归因
+  （mwa 无触发时序暂不归因；AudioWorklet 48ch 快照后换实时数据源）
 - ✅ 双后端同步可视化：getOutputTimestamp 真实发声时刻对齐（无延迟扣减）
 - ✅ 加载进度条（流式分段计）；手机竖屏/横屏布局；目录记忆/面包屑右优先/输入模式
 - ⬜ 进度条 seek（ma5w_seek_play 已就绪待接 UI）
