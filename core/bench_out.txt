@@ -54,3 +54,47 @@ Sound 1.mmf              SKIP(no file)
 [oss] Start -> 0
 [seq] pump start entry=0x100a65e0 arg=0x1023bdc8
 [aud] pump start dev=0x1e3d78 buf=0x3554bd0 ring=0x60037140 mode=5 a739=00 a73c=0 a740=1008c3c0 fb290=103b1410 fb28c=103b1408
+Sound_14.mmf             30.0s audio 57.7s wall 0.52x rt
+[init] ctx ok, alloc flat memory...
+[preload] mem img: 1210 blocks, 19360 KB, hwbase=0x029b0000, flat never allocated
+[init] t386 cpu up
+[init] snapshot Hw base = 0x029b0000
+[init] Smw5 @0x10000000 (269 imports), Hw @0x029b0000 (235 imports)
+[init] snapshot overlay: 0 regions
+[init] IAT re-patched: 504 slots
+[load] CNTI[0] 1->0 (protected-content flag normalized)
+[load] MaSound_Load -> 1
+[oss] Seek -> 0
+[oss] Start -> 0
+[seq] pump start entry=0x100a65e0 arg=0x1023bdc8
+[aud] pump start dev=0x1e3d78 buf=0x3554bd0 ring=0x60002490 mode=3 a739=00 a73c=100862c0 a740=1008c2d0 fb290=103b1410 fb28c=103b1408
+[seq] thread returned (restart next pump)
+[seq] pump start entry=0x100a65e0 arg=0x1023bdc8
+20 Disney - Wow an E-mail!.mmf 3.6s audio 1.7s wall 2.12x rt
+[init] ctx ok, alloc flat memory...
+[preload] mem img: 1210 blocks, 19360 KB, hwbase=0x029b0000, flat never allocated
+[init] t386 cpu up
+[init] snapshot Hw base = 0x029b0000
+[init] Smw5 @0x10000000 (269 imports), Hw @0x029b0000 (235 imports)
+[init] snapshot overlay: 0 regions
+[init] IAT re-patched: 504 slots
+[load] MA-2 track: SUBS bits 8-11 off
+[load] MaSound_Load -> 1
+[oss] Seek -> 0
+[oss] Start -> 0
+[seq] pump start entry=0x100a65e0 arg=0x1023bdc8
+[aud] pump start dev=0x1e3d78 buf=0x3554bd0 ring=0x6000ef40 mode=2 a739=00 a73c=0 a740=1008c1b0 fb290=103b1410 fb28c=103b1408
+Delek - Red Leaf.mmf     30.0s audio 19.5s wall 1.54x rt
+[init] ctx ok, alloc flat memory...
+[preload] mem img: 1210 blocks, 19360 KB, hwbase=0x029b0000, flat never allocated
+[init] t386 cpu up
+[init] snapshot Hw base = 0x029b0000
+[init] Smw5 @0x10000000 (269 imports), Hw @0x029b0000 (235 imports)
+[init] snapshot overlay: 0 regions
+[init] IAT re-patched: 504 slots
+[load] MaSound_Load -> 1
+[oss] Seek -> 0
+[oss] Start -> 0
+[seq] pump start entry=0x100a65e0 arg=0x1023bdc8
+[aud] pump start dev=0x1e3d78 buf=0x3554bd0 ring=0x60012010 mode=5 a739=01 a73c=0 a740=1008c3c0 fb290=103b1410 fb28c=103b1408
+Melody03.mmf             3.1s audio 2.9s wall 1.08x rt

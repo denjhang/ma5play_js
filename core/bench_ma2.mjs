@@ -18,7 +18,8 @@ const img = inflateSync(readFileSync(COMPACT + '/ma5_ds.bin.z').subarray(4));
 const pp = m._malloc(img.length); m.HEAPU8.set(img, pp); m._ma5w_set_preload(pp, img.length);
 const dp = m._malloc(COMPACT.length + 1); m.HEAPU8.set(Buffer.from(COMPACT + '\0'), dp);
 m._ma5w_init(dp);
-const buf = m._malloc(960 * 4);
+const CHUNK = Number(process.argv[2] ?? 960);
+const buf = m._malloc(CHUNK * 4);
 for (const f of FILES) {
   let d;
   try { d = readFileSync(BASE + f); } catch { console.log(f.split('/').pop().padEnd(24), 'SKIP(no file)'); continue; }
@@ -27,7 +28,7 @@ for (const f of FILES) {
   let frames = 0, idle = 0;
   const t0 = performance.now();
   while (!m._ma5w_ended() && idle < 200 && frames < 48000 * 30) {
-    const n = m._ma5w_pump(buf, 960);
+    const n = m._ma5w_pump(buf, CHUNK);
     if (n > 0) { frames += n; idle = 0; } else idle++;
   }
   const wall = (performance.now() - t0) / 1000;

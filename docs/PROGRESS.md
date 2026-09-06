@@ -359,3 +359,13 @@ smaf_window.cpp Render() 确认真实布局并复刻：
   MA-5=516 / MA-7=2 / 未知=112。
 - web/../core/bench_ma2.mjs：MA-2 速度基准工具就绪；
   **MA-2 播放卡顿排查移交 imgui（ma2play）窗口做**（用户指示）。
+
+### MA-2 播放效率问题 —— 移交 imgui 窗口（用户裁定：涉及逆向，本窗口只做前端）
+已测得的事实（core/bench_ma2.mjs，node 静态基准，供那边接手）：
+- Melody A (G50, MA-2)：**0.20x rt**（卡顿实锤）；Sound_14 (LG, MA-5)：0.51x；
+  Dot Beat 1.24x / Red Leaf 1.55x / Disney 2.08x / Melody03 1.09x。
+- **速度与泵块尺寸强相关**：Sound_14 在 2400 帧块 = 1.76x，960 帧块 = 0.51x。
+  但 960 帧是效果链正确性要求（melody05 md5 验证）——GUI 原生 960 能到 2.1x，
+  wasm 960 却掉到 0.5x，矛盾点在每次 pump_seq/pump_audio 调用的固定开销
+  （960 块 = 2.5 倍调用次数）。待逆向窗口定位每泵固定成本后回传参数/结论。
+- bench_ma2.mjs 已参数化（node bench_ma2.mjs <chunk>）。
