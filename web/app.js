@@ -398,32 +398,6 @@ function buildChGrid() {
   $('chTable').innerHTML = `<colgroup><col style="width:9%"><col style="width:34%"><col style="width:17%"><col style="width:8%"><col style="width:9%"><col style="width:8%"><col style="width:15%"></colgroup><thead><tr><th>Ch</th><th>Prog</th><th>Note</th><th>Vol</th><th>Pan</th><th>Exp</th><th>Event</th></tr></thead>`;
   chVis.chans = Array.from({ length: 16 }, () => ({ ev: [], notes: [], ei: 0, pc: -1, vol: 100, pan: 64, exp: 127, last: '--', act: false, used: false, progShown: '' }));
 }
-function buildWaveRows(meta) {
-  let sec = document.getElementById('waveRows');
-  if (sec) sec.remove();
-  const voices = meta?.voices ?? [], waves = meta?.waves ?? [];
-  if (!voices.length && !waves.length) return;
-  const tb = $('chTable');
-  sec = document.createElement('tbody');
-  sec.id = 'waveRows';
-  const add = html => { const tr = document.createElement('tr'); tr.innerHTML = html; sec.appendChild(tr); };
-  if (voices.length) {
-    add(`<td colspan="7" style="color:var(--accent2);font-weight:600;padding-top:4px">Voices (SysEx registry, ${voices.length})</td>`);
-    voices.slice(0, 8).forEach((v, i) => {
-      add(`<td>V${i}</td><td class="prog">${v.kind}</td><td class="note">${v.vtype ?? '--'}</td><td>${v.bankM ?? v.bankL ?? '--'}/${v.pc ?? '--'}</td><td>${v.drum ?? '--'}</td><td>--</td><td class="evt">static</td>`);
-    });
-  }
-  if (waves.length) {
-    add(`<td colspan="7" style="color:var(--accent2);font-weight:600;padding-top:4px">PCM Waves (registry, ${waves.length})</td>`);
-    waves.slice(0, 8).forEach((w, i) => {
-      const kind = w.kind ?? (w.src === 'Mwa' ? (w.type === 1 ? 'Awa (stream)' : w.type === 2 ? 'Mwa stream' : w.type === 3 ? 'MSTR' : `Mwa t${w.type}`) : w.src);
-      add(`<td>W${i}</td><td class="prog">${kind}</td><td class="note">${w.id !== undefined ? '#' + w.id : 'M' + i}</td><td>${w.hz ? w.hz + 'Hz' : '--'}</td><td>${w.stereo ? 'st' : 'mo'}</td><td>--</td><td class="evt">${w.size ? (w.size / 1024).toFixed(1) + 'K' : '--'}</td>`);
-    });
-  }
-  if (voices.length + waves.length > 16)
-    add(`<td colspan="7" style="color:var(--dim)">… registry truncated (view log for full list)</td>`);
-  tb.appendChild(sec);
-}
 function chOnTrack(meta) {
   // ma2play 原则：切曲时一次性全扫定型——通道集合、各通道首个乐器/状态
   // 预解析；播放期间行数与乐器名（粘性）不再增删重置。
@@ -436,9 +410,9 @@ function chOnTrack(meta) {
     for (const e of c.ev) { if (c.pc < 0 && e.k === 'PC') c.pc = e.pc; if (c.pc < 0) break; }
     for (const e of c.ev) { if (e.k === 'CC') { if (e.cc === 7) { c.vol = e.v; break; } } }
   }
-  // 只显示用到的通道（数量切曲时定型）
+  // 只显示用到的通道（数量切曲时定型）+ 分版本的非 MIDI 通道行（ma2play 设计）
   const tb = $('chTable');
-  tb.querySelectorAll('tbody:not(#waveRows)').forEach(b => b.remove());
+  tb.querySelectorAll('tbody').forEach(b => b.remove());
   const body = document.createElement('tbody');
   chVis.chans.forEach((c, i) => {
     if (!c.used) return;
@@ -449,17 +423,55 @@ function chOnTrack(meta) {
     tr.innerHTML = `<td>Ch${i}</td><td class="prog">—</td><td class="note">--</td><td class="vol">--</td><td class="pan">--</td><td class="exp">--</td><td class="evt">--</td>`;
     body.appendChild(tr);
   });
+  buildNonMidiRows(body, meta);
   tb.appendChild(body);
-  buildWaveRows(meta);
   // 日志摘要
   const nNotes = meta?.notes?.length ?? 0;
   const usedCh = chVis.chans.map((c, i) => c.used ? i : -1).filter(i => i >= 0);
   const last = meta?.notes?.length ? meta.notes.reduce((m2, n) => n.end > m2 ? n.end : m2, 0) : 0;
   log(`[vis] parsed: ${nNotes} notes, ch=[${usedCh.join(',')}], span 0→${last.toFixed(2)}s (dur ${(meta?.durationMs / 1000 || 0).toFixed(1)}s)`);
-  if (meta?.voices?.length || meta?.waves?.length)
-    log(`[vis] registry: ${meta.voices?.length ?? 0} voices (${[...new Set(meta.voices?.map(v => v.kind) ?? [])].join('+')}), ${meta.waves?.length ?? 0} waves (${[...new Set(meta.waves?.map(w => w.kind) ?? [])].join('+')})`);
   if (!nNotes) log('[vis] ⚠ no notes parsed (compressed/SEQU format not supported for piano)');
 }
+/* 非 MIDI 通道行（ma2play 同款设计，parser 静态数据源）：
+ * MA-2 = ATR0/1（ADPCM 音轨）；MA-3 = P0-7（ROM 鼓）+ wave 行；
+ * MA-5 = wave 行。wave 行 Ch 标签 e<id>/m<idx>（ext=m<waveID>, mwa=m<idx>），
+ * 来源标签 ext/mwa，配色照抄（ext 青 / mwa 紫 / stream 橙 / ATR 琥珀）。 */
+const ROW_COLORS = { atr: 'rgb(230,179,77)', ext: 'rgb(79,199,230)', mwa: 'rgb(217,140,230)', stream: 'rgb(230,171,79)' };
+/* PCM 行 8 色板（ma2play kPcmRowCol，与音量条同色系） */
+const PCM_ROW_COLORS = ['rgb(120,230,181)', 'rgb(181,140,240)', 'rgb(240,140,181)', 'rgb(140,219,240)', 'rgb(219,199,120)', 'rgb(181,240,140)', 'rgb(240,161,219)', 'rgb(161,199,219)'];
+function buildNonMidiRows(body, meta) {
+  const addRow = (label, color, cells) => {
+    const tr = document.createElement('tr');
+    tr.className = 'chrow extra';
+    tr.style.borderLeft = `3px solid ${color}`;
+    tr.innerHTML = `<td>${label}</td><td class="prog">${cells.prog ?? '--'}</td><td class="note">${cells.note ?? '--'}</td><td>${cells.vol ?? '--'}</td><td>${cells.pan ?? '--'}</td><td>${cells.exp ?? '--'}</td><td class="evt">${cells.evt ?? '--'}</td>`;
+    body.appendChild(tr);
+  };
+  const ma = meta?.version ?? 0;
+  // ATR 行：showAtrRows = !(MA>=3)——MA-2 恒显两条（ma2play 同款，不按 atrCount）
+  if (ma <= 2) {
+    for (let a = 0; a < 2; a++)
+      addRow('ATR' + a, ROW_COLORS.atr, { prog: 'ADPCM Stream', note: '#' + a, evt: 'adpcm' });
+  }
+  // PCM 行 P0-7：仅 MA-3、只留 ROM 鼓（ext/Mwa 归 wave 行）；静态鼓音枚举
+  if (ma === 3) {
+    const drums = [...new Set((meta?.notes ?? []).filter(n => n.ch === 9).map(n => n.note))].slice(0, 8);
+    drums.forEach((dn, i) =>
+      addRow('P' + i, PCM_ROW_COLORS[i % 8], { prog: GM_DRUMS[dn] ?? 'ROM Drum', note: noteName(dn), evt: 'rom' }));
+  }
+  // WAVE 行（MA≥3，MwaSlot 定型）：ext=e<waveID> / mwa=m<idx>；Note=同类内 #seq
+  if (ma >= 3) {
+    const seq = { ext: 0, mwa: 0 };
+    (meta?.waves ?? []).slice(0, 10).forEach(w => {
+      const isMwa = w.src === 'Mwa';
+      const kind = isMwa ? 'mwa' : 'ext';
+      addRow(isMwa ? 'm' + (w.id ?? 0) : 'e' + (w.id ?? 0),
+        ROW_COLORS[kind],
+        { prog: isMwa ? 'Mwa Chunk' : 'Inline Wave', note: '#' + (seq[kind]++), evt: kind });
+    });
+  }
+}
+
 function updateChTable(tSec) {
   chVis.chans.forEach((c, i) => {
     if (!c.used) return;

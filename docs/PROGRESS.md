@@ -299,3 +299,20 @@ smaf_window.cpp Render() 确认真实布局并复刻：
 - Inst：GM 全名；ch9 按当前音高显 GM 鼓名。
 - 实测 Sound_1(MA-5)：11 FM + 4 MWA(e1-e4) 行；Dot Beat(MA-2)：
   chTypes 含 Rhythm。
+
+### 非 MIDI 通道行（完整研读 RenderStatusArea + ymf825_backend.h 后照抄）
+设计事实（读码定案）：
+- 数据模型 type：PcmState 1=ATR/2=ROM 鼓/3=ext 旋律/4=Mwa；WaveState
+  1=Awa/2=Mwa 流/3=MSTR；MwaSlot kind 3=ext/4=Mwa chunk/5=stream（load 定型）。
+- **MA-2 恒显 ATR0/1 两条**（showAtrRows = !(MA>=3)，不按 atrCount），
+  adpcm/ADPCM Stream/#idx/Stream，琥珀色。
+- **PCM P0-7 仅 MA-3**、只留 ROM 鼓（ext/Mwa 归 wave 行）、8 色板（与
+  音量条同色系）、行出现后常驻（everActive）。
+- **WAVE 行（MA≥3）**：Ch = e<waveID>/m<idx>/s<waveID>；Voice=ext/mwa/
+  stream；Inst=Inline Wave/Mwa Chunk/Mwa Stream/MSTR Loop；Note=触发音符
+  或同类内 #seq；ext 青/mwa 紫/stream 橙；stream 无 pan。
+- ma2play **不显示 SysEx 注册表**——表只有通道行。
+- 我们的 parser 数据源等价映射：ATR=版本判定+恒显两条；PCM=ch9 静态鼓音
+  枚举；wave=Mwa 块 m<idx> + 内嵌 SysEx e<waveID>；stream 静态不可知不显示。
+- 实测：Sound_1(MA-5) 显示 e1-e4 Inline Wave 行；Dot Beat(MA-2) 显示
+  ATR0/1 ADPCM Stream 行。
