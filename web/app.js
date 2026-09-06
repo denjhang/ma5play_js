@@ -37,20 +37,55 @@ const S = {
 let ctx = null, procNode = null, gainNode = null, muted = false;
 let worker = null;
 
+/* ---------------- 载入进度：分阶段 + 平滑推进（下载/解压=真实百分比，
+ * 编译/初始化=原子阶段无子进度，用时间曲线推演到 92% 封顶，完成即贴合真值） ---------------- */
+const LOAD_STAGES = [
+  ['download-core',    'Downloading core',    30, '📥'],
+  ['compile',          'Compiling core',      22, '⚙️'],
+  ['download-preload', 'Downloading preload', 13, '📦'],
+  ['decompress',       'Decompressing image', 25, '🔓'],
+  ['init',             'Initializing engine', 10, '🚀'],
+];
+const loadUi = { idx: 0, pct: 0, atomic: false, stageT0: 0, extra: '', shown: -1, timer: null };
+function stageGlobal(idx, pct) {
+  let g = 0;
+  for (let i = 0; i < idx; i++) g += LOAD_STAGES[i][2];
+  return g + pct * LOAD_STAGES[idx][2] / 100;
+}
+function loadTick() {
+  let real = stageGlobal(loadUi.idx, loadUi.pct);
+  if (loadUi.atomic)                                  // 原子阶段：~8s 缓动到 92%
+    real = Math.max(real, stageGlobal(loadUi.idx, Math.min(92, (Date.now() - loadUi.stageT0) / 80)));
+  loadUi.shown = loadUi.shown < 0 ? real * 0.4
+    : loadUi.shown + Math.max(0.12, (real - loadUi.shown) * 0.10);   // 永远追不上真值，平滑推进
+  if (loadUi.shown > real) loadUi.shown = real;
+  const [, label, w, ico] = LOAD_STAGES[loadUi.idx];
+  const stagePct = Math.max(0, Math.min(100, Math.round((loadUi.shown - stageGlobal(loadUi.idx, 0)) / w * 100)));
+  $('loadfill').style.width = loadUi.shown.toFixed(1) + '%';
+  const extra = loadUi.extra ? ' · ' + loadUi.extra : '';
+  status(`${ico} ${label} ${stagePct}%${extra}`, false);
+  if (loadUi.shown >= 99.9) { clearInterval(loadUi.timer); loadUi.timer = null; }
+}
+function onLoadProgress(m) {
+  const idx = LOAD_STAGES.findIndex(s => s[0] === m.stage);
+  if (idx < 0) return;
+  loadUi.idx = idx; loadUi.pct = m.pct; loadUi.atomic = !!m.atomic;
+  loadUi.stageT0 = Date.now(); loadUi.extra = m.extra || '';
+  $('loadbar').hidden = false;
+  if (!loadUi.timer) loadTick(), loadUi.timer = setInterval(loadTick, 60);
+}
+
 /* ---------------- 渲染 Worker ---------------- */
 function bootWorker() {
   worker = new Worker('render-worker.js');
   worker.onmessage = e => {
     const m = e.data;
     if (m.id !== undefined && m.id !== S.loadId) return;   // 旧代消息：切曲后迟到，丢弃
-    if (m.type === 'progress') {
-      $('loadbar').hidden = false;
-      $('loadfill').style.width = m.pct + '%';
-      status(`${m.label} ${m.pct}%`, m.pct >= 100);
-      return;
-    }
+    if (m.type === 'progress') { onLoadProgress(m); return; }
     if (m.type === 'ready') {
-      $('loadbar').hidden = true;
+      if (loadUi.timer) { clearInterval(loadUi.timer); loadUi.timer = null; }
+      $('loadfill').style.width = '100%';
+      setTimeout(() => { $('loadbar').hidden = true; }, 350);
       S.workerReady = true;
       $('chipMode').textContent = m.compact ? 'compact 预载' : 'flat';
       status('Core ready (worker)', true);

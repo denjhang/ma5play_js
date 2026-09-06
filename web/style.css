@@ -125,7 +125,15 @@ body {
   position: absolute; left: 0; right: 0; top: 100%; height: 3px;
   background: var(--panel2); overflow: hidden;
 }
-.loadfill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width .2s; }
+.loadfill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width .15s linear; }
+.loadbar::after {                    /* 推进光斑：平滑推进时有"在动"的视觉反馈 */
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(105deg, transparent 30%, rgba(255,255,255,.25) 50%, transparent 70%);
+  background-size: 200% 100%;
+  animation: loadsheen 1.2s linear infinite;
+}
+.loadbar[hidden] { display: none; }
+@keyframes loadsheen { from { background-position: 200% 0; } to { background-position: -100% 0; } }
 .progress { flex: 1; height: 6px; background: var(--panel2); border-radius: 99px; overflow: hidden; }
 .progress .bar { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--accent2)); }
 

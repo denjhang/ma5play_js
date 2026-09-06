@@ -11,7 +11,7 @@ const CHUNK_FRAMES = 960;                     // 20ms/块——必须与 GUI/tp5
 const ONSIDE_MAX = FRAMES_PER_SEC * 4;
 let outstanding = 0, trackId = 0, trackLoaded = false;
 
-// 流式 fetch（带百分比进度回调）
+// 流式 fetch（带百分比进度 + 实时速度回调）
 async function fetchProgress(url, onPct) {
   const r = await fetch(url);
   if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
@@ -19,12 +19,14 @@ async function fetchProgress(url, onPct) {
   if (!r.body || !total) return new Uint8Array(await r.arrayBuffer());
   const reader = r.body.getReader();
   const chunks = [];
-  let got = 0;
+  let got = 0, t0 = performance.now();
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
     chunks.push(value); got += value.length;
-    onPct(Math.min(100, Math.round(got / total * 100)));
+    const dt = (performance.now() - t0) / 1000;
+    const mbps = dt > 0.1 ? (got / 1048576 / dt).toFixed(1) : null;
+    onPct(Math.min(100, got / total * 100), mbps ? mbps + ' MB/s · ' + (got / 1048576).toFixed(1) + '/' + (total / 1048576).toFixed(1) + ' MB' : '');
   }
   const out = new Uint8Array(got);
   let off = 0;
@@ -33,9 +35,10 @@ async function fetchProgress(url, onPct) {
 }
 
 // ma5_ds.bin.z = 4 字节小端原始长度 + zlib 流（DecompressionStream 'deflate' = zlib 包装）
-async function loadPreload(onPct) {
-  const z = await fetchProgress('assets/ma5_ds.bin.z', p => onPct(50 + p * 0.2));  // 50~70%
+async function loadPreload(stage) {
+  const z = await fetchProgress('assets/ma5_ds.bin.z', (p, ex) => stage('download-preload', p, ex));
   const rawLen = z[0] | (z[1] << 8) | (z[2] << 16) | (z[3] << 24);
+  stage('decompress', 0, '18.9 MB image');
   const ds = new DecompressionStream('deflate');
   const stream = new Blob([z.subarray(4)]).stream().pipeThrough(ds);
   const reader = stream.getReader();
@@ -45,7 +48,7 @@ async function loadPreload(onPct) {
     const { done, value } = await reader.read();
     if (done) break;
     out.set(value, got); got += value.length;
-    onPct(70 + Math.min(100, got / rawLen * 100) * 0.25);                        // 70~95%
+    stage('decompress', got / rawLen * 100);
   }
   if (got !== rawLen) throw new Error(`preload len ${got} != ${rawLen}`);
   return out;
@@ -55,20 +58,20 @@ onmessage = async e => {
   const msg = e.data;
   if (msg.cmd === 'init') {
     try {
-      const prog = (pct, label) => postMessage({ type: 'progress', pct: Math.round(pct), label });
-      prog(2, 'download core');
-      const wasmBin = await fetchProgress('assets/ma5play.wasm', p => prog(2 + p * 0.43, 'download core'));   // 2~45%
-      prog(46, 'compile');
+      // 分阶段上报：pct = 阶段内 0~100；atomic = 无子进度的原子阶段（主线程时间曲线推演）
+      const stage = (name, pct, extra) => postMessage({ type: 'progress', stage: name, pct: Math.max(0, Math.min(100, pct)), atomic: name === 'compile' || name === 'init', extra: extra || '' });
+      stage('download-core', 0);
+      const wasmBin = await fetchProgress('assets/ma5play.wasm', (p, ex) => stage('download-core', p, ex));
+      stage('compile', 0);
       M = await ma5play({ wasmBinary: wasmBin.buffer, locateFile: p => 'assets/' + p });
-      prog(50, 'download preload image');
-      const img = await loadPreload((p, l) => prog(p, l));
-      prog(96, 'init engine');
+      const img = await loadPreload(stage);
+      stage('init', 0);
       const ip = M._malloc(img.byteLength);
       new Uint8Array(M.HEAPU8.buffer, M.HEAPU8.byteOffset + ip, img.byteLength).set(img);
       M._ma5w_set_preload(ip, img.byteLength);
       if (M._ma5w_init(0) !== 0) { postMessage({ type: 'error', msg: 'init: ' + M._ma5w_last_error() }); return; }
       pcmPtr = M._malloc(4 * CHUNK_FRAMES);
-      prog(100, 'ready');
+      stage('init', 100);
       postMessage({ type: 'ready', compact: !!M._ma5w_compact_mode() });
       setInterval(pump, 50);
     } catch (e) { postMessage({ type: 'error', msg: 'init: ' + e.message }); }
