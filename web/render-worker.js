@@ -5,7 +5,9 @@ importScripts('assets/ma5play.js');           // 全局 ma5play 工厂
 
 let M = null, pcmPtr = 0;
 const FRAMES_PER_SEC = 48000;
-const CHUNK_FRAMES = 2400;                    // 50ms/块
+const CHUNK_FRAMES = 960;                     // 20ms/块——必须与 GUI/tp5 一致！
+                                              // 50ms 块会破坏 DLL 效果链状态
+                                              // （melody05 哇音损坏，md5 验证 960=原生）
 const ONSIDE_MAX = FRAMES_PER_SEC * 4;
 let outstanding = 0, trackId = 0, trackLoaded = false;
 

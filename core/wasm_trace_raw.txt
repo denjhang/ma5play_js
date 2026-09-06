@@ -1,0 +1,98 @@
+[init] ctx ok, alloc flat memory...
+[preload] mem img: 1210 blocks, 19360 KB, hwbase=0x029b0000, flat never allocated
+[init] t386 cpu up
+[init] Smw5 file (1998848 bytes)
+[init] snapshot Hw base = 0x029b0000
+[init] Hw file (1097728 bytes)
+[init] Smw5 @0x10000000 (269 imports), Hw @0x029b0000 (235 imports)
+[init] snapshot overlay: 0 regions
+[init] IAT re-patched: 504 slots
+[init] ctx ok, alloc flat memory...
+[preload] mem img: 1210 blocks, 19360 KB, hwbase=0x029b0000, flat never allocated
+[init] t386 cpu up
+[init] snapshot Hw base = 0x029b0000
+[init] Smw5 @0x10000000 (269 imports), Hw @0x029b0000 (235 imports)
+[init] snapshot overlay: 0 regions
+[init] IAT re-patched: 504 slots
+[load] MaSound_Load -> 1
+[oss] Seek -> 0
+[oss] Start -> 0
+[seq] pump start entry=0x100a65e0 arg=0x1023bdc8
+[aud] pump start dev=0x1e3d78 buf=0x3554bd0 ring=0x600034f0 mode=5 a739=00 a73c=0 a740=1008c3c0 fb290=103b1410 fb28c=103b1408
+[bassg] global19d0=5431 sh19cc=2
+[bass] t=0.0043 ch=02 wv=c57fe81 st=5 ph=9 step=4aa0 env=7f9a67bf gL=17ef gR=f1a ls=3577 end=5595
+[halt] unexpected EIP=0x029b1c9a iter=30
+[bass] t=0.0087 ch=00 wv=ffe2ffd3 st=5 ph=13 step=2c00 env=80000000 gL=1fcd gR=885 ls=0 end=13530
+[bass] t=0.0127 ch=03 wv=7fff7fff st=5 ph=24 step=4000 env=80000000 gL=17ef gR=17ef ls=937 end=937
+[bass] t=0.0163 ch=01 wv=1375119d st=4 ph=19 step=2348 env=7fe0df86 gL=bed gR=bed ls=1167 end=1327
+[bass] t=0.0200 ch=04 wv=cb847f84 st=5 ph=55 step=5000 env=80000000 gL=bff gR=1699 ls=1239 end=1239
+[bass] t=0.9763 ch=01 wv=1375119d st=1 ph=1289 step=2348 env=2520a9c gL=bed gR=bed ls=1167 end=1327
+[bass] t=1.0450 ch=05 wv=1375119d st=4 ph=19 step=2348 env=7fe0df86 gL=bed gR=bed ls=1167 end=1327
+[bass] t=1.0480 ch=06 wv=7fff7fff st=5 ph=44 step=4000 env=80000000 gL=23d0 gR=23d0 ls=937 end=937
+[bass] t=1.0563 ch=01 wv=1375119d st=0 ph=1202 step=2348 env=0 gL=bed gR=bed ls=1167 end=1327
+[bass] t=1.1373 ch=07 wv=0 st=2 ph=0 step=5000 env=0 gL=603 gR=b53 ls=1239 end=1239
+[bass] t=1.1400 ch=07 wv=cb847f84 st=5 ph=10 step=5000 env=80000000 gL=603 gR=b53 ls=1239 end=1239
+[bass] t=1.8490 ch=05 wv=1375119d st=0 ph=304 step=2348 env=0 gL=bed gR=bed ls=1167 end=1327
+[bass] t=1.8720 ch=08 wv=1375119d st=4 ph=24 step=2348 env=7fd9dcda gL=aa1 gR=aa1 ls=1167 end=1327
+[bass] t=2.0520 ch=08 wv=1375119d st=1 ph=156 step=2348 env=1050e9c gL=aa1 gR=aa1 ls=1167 end=1327
+[bass] t=2.1600 ch=08 wv=1375119d st=0 ph=224 step=2348 env=0 gL=aa1 gR=aa1 ls=1167 end=1327
+[bass] t=2.7897 ch=09 wv=1375119d st=4 ph=6 step=2348 env=7ff5e9d6 gL=bed gR=bed ls=1167 end=1327
+[bass] t=2.8160 ch=10 wv=7fff7fff st=5 ph=69 step=6550 env=80000000 gL=1e22 gR=1e22 ls=2971 end=2971
+[bass] t=2.9160 ch=11 wv=cb847f84 st=5 ph=10 step=5000 env=80000000 gL=d75 gR=195b ls=1239 end=1239
+[bass] t=4.0057 ch=09 wv=1375119d st=0 ph=648 step=2348 env=0 gL=bed gR=bed ls=1167 end=1327
+[bass] t=4.0120 ch=12 wv=1375119d st=4 ph=24 step=2348 env=7fd9dcda gL=bed gR=bed ls=1167 end=1327
+[bass] t=5.4960 ch=13 wv=cb847f84 st=5 ph=25 step=5000 env=80000000 gL=b52 gR=1554 ls=1239 end=1239
+[bass] t=6.7667 ch=15 wv=0 st=2 ph=0 step=6550 env=0 gL=ab0 gR=ab0 ls=2971 end=2971
+[bass] t=6.7720 ch=15 wv=7fff7fff st=5 ph=12 step=6550 env=80000000 gL=ab0 gR=ab0 ls=2971 end=2971
+[bass] t=11.6893 ch=07 wv=cb847f84 st=2 ph=1239 step=3ed8 env=0 gL=bed gR=bed ls=1167 end=1327
+[bass] t=11.6973 ch=07 wv=1375119d st=4 ph=7 step=3ed8 env=7ff96be4 gL=bed gR=bed ls=1167 end=1327
+[bass] t=13.0333 ch=07 wv=1375119d st=1 ph=989 step=3ed8 env=7c98008b gL=bed gR=bed ls=1167 end=1327
+[bass] t=13.2573 ch=07 wv=1375119d st=0 ph=1154 step=3ed8 env=0 gL=bed gR=bed ls=1167 end=1327
+[bass] t=18.2867 ch=15 wv=7fff7fff st=2 ph=2971 step=3ed8 env=0 gL=bed gR=bed ls=1167 end=1327
+[bass] t=18.2920 ch=15 wv=1375119d st=4 ph=7 step=3ed8 env=7ff96be4 gL=bed gR=bed ls=1167 end=1327
+[bass] t=21.5507 ch=15 wv=1375119d st=1 ph=1260 step=3ed8 env=77e1cd79 gL=bed gR=bed ls=1167 end=1327
+[bass] t=21.7747 ch=15 wv=1375119d st=0 ph=1265 step=3ed8 env=0 gL=bed gR=bed ls=1167 end=1327
+[bass] t=26.4733 ch=07 wv=1375119d st=2 ph=1154 step=2348 env=0 gL=aa1 gR=aa1 ls=1167 end=1327
+[bass] t=26.4813 ch=07 wv=1375119d st=4 ph=4 step=2348 env=7ff96be4 gL=aa1 gR=aa1 ls=1167 end=1327
+[bass] t=26.7933 ch=07 wv=1375119d st=1 ph=132 step=2348 env=7f2e9349 gL=aa1 gR=aa1 ls=1167 end=1327
+[bass] t=27.0173 ch=07 wv=1375119d st=0 ph=224 step=2348 env=0 gL=aa1 gR=aa1 ls=1167 end=1327
+[bass] t=34.6707 ch=15 wv=1375119d st=2 ph=1265 step=3ed8 env=0 gL=bed gR=bed ls=1167 end=1327
+[bass] t=34.6760 ch=15 wv=1375119d st=4 ph=7 step=3ed8 env=7ff96be4 gL=bed gR=bed ls=1167 end=1327
+[bass] t=36.0147 ch=15 wv=1375119d st=1 ph=989 step=3ed8 env=7c98008b gL=bed gR=bed ls=1167 end=1327
+[bass] t=36.2387 ch=15 wv=1375119d st=0 ph=1154 step=3ed8 env=0 gL=bed gR=bed ls=1167 end=1327
+[bass] t=38.1853 ch=07 wv=1375119d st=2 ph=224 step=5000 env=0 gL=b52 gR=1554 ls=1239 end=1239
+[bass] t=38.1933 ch=07 wv=cb847f84 st=5 ph=10 step=5000 env=80000000 gL=b52 gR=1554 ls=1239 end=1239
+[bass] t=47.8547 ch=15 wv=1375119d st=2 ph=1154 step=2348 env=0 gL=bed gR=bed ls=1167 end=1327
+[bass] t=47.8600 ch=15 wv=1375119d st=4 ph=4 step=2348 env=7ff96be4 gL=bed gR=bed ls=1167 end=1327
+[bass] t=50.9267 ch=15 wv=1375119d st=1 ph=1270 step=2348 env=7858574a gL=bed gR=bed ls=1167 end=1327
+[bass] t=51.1133 ch=07 wv=cb847f84 st=2 ph=1239 step=4000 env=0 gL=23d0 gR=23d0 ls=937 end=937
+[bass] t=51.1213 ch=07 wv=7fff7fff st=5 ph=8 step=4000 env=80000000 gL=23d0 gR=23d0 ls=937 end=937
+[bass] t=51.1507 ch=15 wv=1375119d st=0 ph=1202 step=2348 env=0 gL=bed gR=bed ls=1167 end=1327
+[bass] t=62.6333 ch=07 wv=7fff7fff st=2 ph=937 step=6550 env=0 gL=ab0 gR=ab0 ls=2971 end=2971
+[bass] t=62.6387 ch=15 wv=1375119d st=2 ph=1202 step=7db0 env=0 gL=bed gR=bed ls=1167 end=1327
+[bass] t=62.6413 ch=07 wv=7fff7fff st=5 ph=12 step=6550 env=80000000 gL=ab0 gR=ab0 ls=2971 end=2971
+[bass] t=62.6440 ch=15 wv=1375119d st=4 ph=15 step=7db0 env=7ff96be4 gL=bed gR=bed ls=1167 end=1327
+[bass] t=63.9827 ch=15 wv=1375119d st=1 ph=1179 step=7db0 env=7c98008b gL=bed gR=bed ls=1167 end=1327
+[bass] t=64.2067 ch=15 wv=1375119d st=0 ph=1189 step=7db0 env=0 gL=bed gR=bed ls=1167 end=1327
+[bass] t=74.3453 ch=07 wv=7fff7fff st=2 ph=2971 step=5000 env=0 gL=bff gR=1699 ls=1239 end=1239
+[bass] t=74.3533 ch=07 wv=cb847f84 st=5 ph=10 step=5000 env=80000000 gL=bff gR=1699 ls=1239 end=1239
+[bass] t=77.4227 ch=15 wv=1375119d st=2 ph=1189 step=2348 env=0 gL=bed gR=bed ls=1167 end=1327
+[bass] t=77.4280 ch=15 wv=1375119d st=4 ph=4 step=2348 env=7ff96be4 gL=bed gR=bed ls=1167 end=1327
+[bass] t=77.9347 ch=15 wv=1375119d st=1 ph=211 step=2348 env=7eb14d93 gL=bed gR=bed ls=1167 end=1327
+[bass] t=78.1587 ch=15 wv=1375119d st=0 ph=304 step=2348 env=0 gL=bed gR=bed ls=1167 end=1327
+[bass] t=87.5293 ch=07 wv=cb847f84 st=2 ph=1239 step=5000 env=0 gL=bff gR=1699 ls=1239 end=1239
+[bass] t=87.5373 ch=07 wv=cb847f84 st=5 ph=10 step=5000 env=80000000 gL=bff gR=1699 ls=1239 end=1239
+[bass] t=90.6067 ch=15 wv=1375119d st=2 ph=304 step=4000 env=0 gL=d75 gR=d75 ls=937 end=937
+[bass] t=90.6120 ch=15 wv=7fff7fff st=5 ph=8 step=4000 env=80000000 gL=d75 gR=d75 ls=937 end=937
+[bass] t=97.3853 ch=07 wv=cb847f84 st=2 ph=1239 step=52a0 env=0 gL=1423 gR=25f0 ls=3323 end=3323
+[bass] t=97.3933 ch=07 wv=5756bb56 st=5 ph=10 step=52a0 env=80000000 gL=1423 gR=25f0 ls=3323 end=3323
+[bass] t=103.7267 ch=15 wv=7fff7fff st=2 ph=937 step=2348 env=0 gL=bed gR=bed ls=1167 end=1327
+[bass] t=103.7320 ch=15 wv=7fff7fff st=4 ph=4 step=2348 env=7ff96be4 gL=bed gR=bed ls=1167 end=1327
+[bass] t=104.2387 ch=15 wv=1375119d st=1 ph=211 step=2348 env=7eb14d93 gL=bed gR=bed ls=1167 end=1327
+[bass] t=104.4627 ch=15 wv=1375119d st=0 ph=304 step=2348 env=0 gL=bed gR=bed ls=1167 end=1327
+[bass] t=111.9773 ch=07 wv=5756bb56 st=2 ph=3323 step=6550 env=0 gL=ab0 gR=ab0 ls=2971 end=2971
+[bass] t=111.9853 ch=07 wv=7fff7fff st=5 ph=12 step=6550 env=80000000 gL=ab0 gR=ab0 ls=2971 end=2971
+[bass] t=116.9107 ch=15 wv=1375119d st=2 ph=304 step=4000 env=0 gL=d75 gR=d75 ls=937 end=937
+[bass] t=116.9160 ch=15 wv=7fff7fff st=5 ph=8 step=4000 env=80000000 gL=d75 gR=d75 ls=937 end=937
+[bass] t=123.4333 ch=07 wv=7fff7fff st=2 ph=2971 step=3ed8 env=0 gL=bed gR=bed ls=1167 end=1327
+[bass] t=123.4413 ch=07 wv=1375119d st=4 ph=7 step=3ed8 env=7ff96be4 gL=bed gR=bed ls=1167 end=1327

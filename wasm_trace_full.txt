@@ -1,0 +1,22 @@
+node:internal/modules/cjs/loader:1459
+  throw err;
+  ^
+
+Error: Cannot find module './build/ma5play_node.js'
+Require stack:
+- D:\working\vscode-projects\ma5play_js\[eval]
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1456:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1066:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1071:22)
+    at Module._load (node:internal/modules/cjs/loader:1242:25)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    at Module.require (node:internal/modules/cjs/loader:1556:12)
+    at require (node:internal/modules/helpers:152:16)
+    at [eval]:2:22
+    at runScriptInThisContext (node:internal/vm:219:10)
+    at node:internal/process/execution:451:12 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [ 'D:\\working\\vscode-projects\\ma5play_js\\[eval]' ]
+}
+
+Node.js v24.14.1

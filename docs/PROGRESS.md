@@ -182,3 +182,22 @@ smaf_window.cpp Render() 确认真实布局并复刻：
 - 新顺序（app.js loadTrack）：**postMessage stop 停旧泵 → 淡出已排队尾音
   （120ms，含在途消息送达窗口）→ suspend → 清 queue/qFrames/blkOff →
   才发 load**。清空后旧代字节不可能再进队（worker 已停 + id 过滤双保险）。
+
+## 2026-09-06（五）— melody05 电吉他效果器损坏根因：泵块尺寸
+
+### 排查过程（全程调用链路验证，遵守禁音频对拍规则）
+1. wasm 全曲 md5(3ac28d5d) ≠ tp5 原生(c6a66d26)；-O0≡-O1、-fwrapv 无变化
+   → 非编译器问题。
+2. MA5T_BASSDUMP 逐通道 trace（wv/st/ph/step/env/gL/gR，全曲 151 行）
+   wasm 与原生**完全一致** → 通道合成链（含哇音滤波参数）正确。
+3. tp5 复跑两次 md5 相同 → 分歧真实存在于通道探针下游的效果/混音路径。
+4. **真凶：worker 泵块尺寸 2400 帧(50ms)，GUI/tp5 均为 960 帧(20ms)**。
+   DLL 效果链状态对泵粒度敏感，50ms 块损坏效果器输出。
+   wasm 改 960 帧/泵后 md5 = c6a66d26 = tp5 原生**逐字节一致**。
+
+### 修复
+- render-worker.js CHUNK_FRAMES 2400 → 960。wasm 本体无需重编。
+
+### 记入 AGENTS.md 铁律
+- ma5t 泵块尺寸是行为参数：必须 960 帧/20ms（GUI 同款），改它会破坏
+  效果链数值输出。
