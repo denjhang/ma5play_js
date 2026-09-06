@@ -12,18 +12,24 @@
   主线程 ScriptProcessor 消费 → 现代 PWA UI；Modizer 式钢琴键盘可视化。
 - **不做 wav/md5 对拍验收**（听感由用户做）；md5 只用于核心等价性定位。
 - 工具链用 msys2 pacman 的 emscripten，不用 emsdk。
+- **界面默认英文**（面向 YouTube 国际用户）；代码注释中文。
 
-## 当前状态（2026-09-06）
+## 当前状态（2026-09-06 深夜）
 
 - ✅ 工具链 / 构建 / node 冒烟（compact 核心全曲渲染）
-- ✅ web 播放器：ma2play 布局（左 File Info | 右上 钢琴+48ch 占位 |
-  右下 文件浏览器[传输条+面包屑+文件夹历史]+Log）
-- ✅ Worker 渲染 + 消息流控；切曲干净（停泵→淡出→清缓冲→加载）
+- ✅ web 播放器：ma2play 布局（左 File Info | 右上 钢琴 | 右下 文件浏览器+Log）
+- ✅ Worker 渲染 + 消息流控；切曲干净（停泵→淡出→清缓冲→加载，零旧音残留）
 - ✅ 完整 MMF 解析器（web/mmf.js，ymf825emu/src/mmf_parser.cpp 逐函数移植）
-- ✅ mel4ody05 效果器问题定位并修复（泵块尺寸，见铁律）
+- ✅ melody05 效果器修复（泵块尺寸 960，见铁律）
+- ✅ 钢琴键盘：ma2play 同款绘制（比例/配色/blend），parser 时间轴，
+  多通道同音**水平切分**各通道色；手机两行
+- ✅ 通道表：ma2play 分版本设计（详见下"通道表设计"）
+- ✅ 双后端同步可视化：getOutputTimestamp 真实发声时刻对齐（无延迟扣减）
+- ✅ 加载进度条（流式分段计）；手机竖屏/横屏布局；目录记忆/面包屑右优先/输入模式
 - ⬜ 进度条 seek（ma5w_seek_play 已就绪待接 UI）
-- ⬜ AudioWorklet 壳 + 48ch 通道状态快照
+- ⬜ AudioWorklet 壳 + 48ch 通道状态快照（表数据源届时换实时）
 - ⬜ -O2 wasm-opt 挂死排查（现用 -O1）
+- ⬜ PWA manifest + 部署；存储策略（SW Cache 核心资产 / 曲库缓存）
 
 ## 目录
 
@@ -52,16 +58,44 @@ build/  构建产物（不入库）
 5. DLL 加载：compact host 从磁盘找 M5_EmuSmw5/Hw.dll——web 构建用
    --preload-file 打进 MEMFS；node 用 dir 参数指向 compact 目录；
    GetModuleFileNameA 在 shell 有桩。
-6. CFLAGS 加 `-fwrapv -fno-strict-aliasing`（原生链大量故意回绕 + uint32*
-   双关；实测不改变输出但保留是安全网）+ `-D_stricmp=strcasecmp`。
+6. CFLAGS 加 `-fwrapv -fno-strict-aliasing`（安全网）+ `-D_stricmp=strcasecmp`。
 7. 音频管线：Worker pump → postMessage(transferable) → 主线程帧队列 →
    ScriptProcessor(48kHz)。**块内偏移 S.blkOff 跨回调持久**（半块重播
    = 细微卡顿+变慢的根因）。预滚 2s 门控 + 欠载回预滚。
 8. 切曲顺序：stop worker → 淡出 120ms（等在途消息送达）→ suspend →
    清 queue/qFrames/blkOff → 才发 load；加载代际 id 过滤旧代消息。
-9. 测试曲目用 `ma2play/bin/mmf/` 语料；melody05 标准文件 =
-   Samsung SGH-D500 Pre-downloaded/Melody05.mmf。
-10. 性能：node 全曲 1.7~2.9x realtime；MA-2 (Dot Beat) 4.2x。
+9. **可视化时钟**：音频回调只做锚点校准（clkSong/clkAt），帧间用
+   `ctx.getOutputTimestamp().contextTime`（真实发声时刻）插值——
+   不扣减 outputLatency（蓝牙/webview 会报 1~2s，扣了反而滞后）。
+   曾用 playedFrames 直读（85ms 台阶跳变，被用户驳回）。
+10. mmf.js 输出单位 = **秒**（曾有 ms/秒混用导致钢琴全空、Note 恒 `--`）。
+11. 测试曲目用 `ma2play/bin/mmf/` 语料；melody05 标准文件 =
+    Samsung SGH-D500 Pre-downloaded/Melody05.mmf。
+12. 性能：node 全曲 1.7~2.9x realtime；MA-2 (Dot Beat) 4.2x。
+
+## 通道表设计（照抄 ma2play RenderStatusArea，已读全码）
+
+- 7 列（ma2play 10 列版被用户裁定不可读，回退 7 列）：
+  Ch|Prog|Note|Vol|Pan|Exp|Event。**表里没有 SysEx 注册表**。
+- **切曲全扫定型**：行集合/各通道首个 PC+CC7 载入即定；播放期零增删。
+- **粘性缓存**：不活跃保留上次值灰色；换曲清空。
+- 行左缘 3px 通道色（kChColors）；未激活灰 #66748f。
+- **分版本非 MIDI 行**（parser 静态等价映射）：
+  - MA-2：**恒显 ATR0/1**（showAtrRows=!(MA>=3)），adpcm/ADPCM Stream/#idx，琥珀
+  - MA-3：PCM P0-7（仅 ROM 鼓；8 色板；ch9 静态鼓音枚举），`rom`
+  - MA≥3：WAVE 行 Ch=`e<waveID>`(内嵌 SysEx)/`m<idx>`(Mwa 块)；
+    Voice=ext/mwa；Inst=Inline Wave/Mwa Chunk；ext 青/mwa 紫/stream 橙；
+    stream（运行时 waveSlots）静态不可知不显示
+- ma2play 原版数据模型（对照用）：PcmState type 1=ATR/2=ROM 鼓/3=ext
+  旋律/4=Mwa；WaveState 1=Awa/2=Mwa 流/3=MSTR；MwaSlot kind 3/4/5。
+
+## 钢琴设计（照抄 ma2play RenderPianoArea）
+
+- 音域 12..107(C0..B8)、白键先黑键后、黑键 x=(wk-1)*ww+ww-bw/2、
+  bw=ww*0.65、白键长=6.2×白键宽（真钢琴比例）、blend=0.55+lv*0.45。
+- 多通道同音：**水平切分**（上下堆叠各通道色，非竖条）。
+- 手机窄/矮视口拆两行，单行限高 60px；C 音名恒显。
+- 数据源 = parser 音符时间轴（VIS_PARSER 同思路），visClock 对齐。
 
 ## 外部依赖（只引用，绝不复制进本仓库）
 
@@ -83,6 +117,8 @@ build/  构建产物（不入库）
 | `DEVELOPMENT.md` | 全量进度史；2830 行起 = 本项目立项小节 |
 | `AGENTS.md` / `HANDOFF.md` | dmplayer 工作规则 + round31 教训 |
 | `ymf825emu\src\mmf_parser.cpp` | **MMF 解析器唯一权威参考**（用户指定） |
+| `src\windows\smaf\smaf_window.cpp` | **UI 设计唯一权威参考**（钢琴/通道表/文件浏览器/布局） |
+| `src\core\ymf825_backend.h` | 可视化数据模型（PcmState/WaveState/MwaSlot） |
 
 ## 构建与运行
 
@@ -90,7 +126,7 @@ build/  构建产物（不入库）
 # 构建（git bash，emcc 是 msys2 sh 脚本；务必显式 -O1！默认 -O2 会撞 wasm-opt 挂死）
 /d/msys64/usr/bin/bash -lc "cd core && MA5PLAY_OPT=-O1 sh build.sh node"   # 或 web
 sh web/prepare.sh            # 刷新 assets（含 node 图标提取，需 git bash 的 node）
-node web/server.mjs          # http://127.0.0.1:8095
+node web/server.mjs          # http://127.0.0.1:8095（只绑 127.0.0.1，用户指示）
 
 # 等价性验证（核心改动后跑）
 cd core && node md5check.mjs        # melody05 全曲 md5，期望 c6a66d26（960 帧泵）
@@ -120,3 +156,6 @@ node switch_test.mjs                # 连播四曲
 7. 不用 subagent 做核心工作、不进计划模式；每步完成即提交 + 更新本文件；
    等 user 说"继续"再推进。
 8. 不动 dmplayer 仓库任何文件（只读引用）。
+9. **UI 设计照抄 ma2play**（smaf_window.cpp 是唯一权威）；改表/钢琴前先读
+   对应 Render 函数全码，禁止自创设计（SysEx 注册表显示、10 列表、竖条纹
+   琴键均被驳回）。服务器只绑 127.0.0.1。

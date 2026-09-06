@@ -316,3 +316,33 @@ smaf_window.cpp Render() 确认真实布局并复刻：
   枚举；wave=Mwa 块 m<idx> + 内嵌 SysEx e<waveID>；stream 静态不可知不显示。
 - 实测：Sound_1(MA-5) 显示 e1-e4 Inline Wave 行；Dot Beat(MA-2) 显示
   ATR0/1 ADPCM Stream 行。
+
+## 2026-09-06（总结）— 会话全部成果
+
+### 核心层
+- 源从 libma5t_exp 切换 **libma5t_compact**（GUI 同源）；shell 照抄 ma5p_pump
+  语义（no_pcm>100 曲终）；pause/resume/seek 导出就绪。
+- **melody05 效果器损坏根因 = 泵块尺寸**（2400→960 帧，md5 与原生逐字节一致）。
+- 等价性工具：md5check（melody05 全曲 c6a66d26）、switch_test、cmpflag。
+
+### web 播放器（界面英文，面向 YouTube）
+- 布局照抄 ma2play：左 File Info | 右上钢琴 | 右下文件浏览器(传输条+
+  面包屑右优先+点击输入模式+文件夹历史+目录记忆)+Log；ma2play 图标。
+- Worker 渲染（消息传递+代际 id）；切曲零残留（停泵→淡出→清缓冲→加载）；
+  预滚 2s 门控+欠载回预滚；blkOff 持久化修半块重播（卡顿+变慢根因）。
+- **mmf.js 完整解析器**（ymf825emu 逐函数移植）：Huffman/HPS/SEQU/MMMG/
+  CNTI 标题/Mx: 版本/SysEx 全类型注册表（voices/waves）/通道类型/ATR 计数。
+  输出单位=秒（ms 混用曾致可视化全空）。
+- **钢琴**：ma2play RenderPianoArea 同款（比例/配色/blend/C 音名），
+  parser 时间轴 + visClock（getOutputTimestamp 真实发声时刻）同步，
+  多通道同音水平切分多色，手机两行（含横屏），键释放渐隐。
+- **通道表**：ma2play 分版本设计——7 列、切曲全扫定型、粘性缓存、通道色；
+  MA-2 恒显 ATR0/1；MA-3 PCM 8 色板 ROM 鼓行；MA≥3 wave 行 e<waveID>/m<idx>
+  （ext 青/mwa 紫）；不显示 SysEx 注册表（10 列版被驳回回退）。
+- 手机竖屏/横屏完整适配（横屏通道表上移钢琴上方）；加载百分比进度条；
+  页脚手机隐藏；历史下拉溢出修复。
+
+### 可视化调试方法论（用户确立）
+- 载入即出解析摘要日志 + 首键点亮时间戳 → 静态↔运行对比闭环
+  （Sound_1: 解析首音符 2.0s ↔ 点亮 2.01s）。
+- __dbg 探针：队列/时钟锚点/延迟/首音符。
