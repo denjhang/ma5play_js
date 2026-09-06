@@ -322,11 +322,11 @@ const piano = (() => {
         if (isBlack(n)) continue;
         const x = wkIdx * wkW;
         const a = active.get(n);
-        if (a?.length) {                            // 多通道同音：横向等分，各通道一色
-          const sw = (wkW - 1) / a.length;
+        if (a?.length) {                            // 多通道同音：水平切分（上下堆叠），各通道一色
+          const sh = wkH / a.length;
           a.forEach((seg, si) => {
             g.fillStyle = blendKey(CH_COLORS[seg.ch], seg.lv, false);
-            g.fillRect(x + si * sw, y, sw, wkH);
+            g.fillRect(x, y + si * sh, wkW - 1, sh);
           });
         } else {
           g.fillStyle = 'rgb(255,255,255)';
@@ -352,10 +352,10 @@ const piano = (() => {
         const x = (wkIdx - 1) * wkW + wkW - bkW * 0.5;
         const a = active.get(n);
         if (a?.length) {
-          const sw = bkW / a.length;
+          const sh = bkH / a.length;
           a.forEach((seg, si) => {
             g.fillStyle = blendKey(CH_COLORS[seg.ch], seg.lv, true);
-            g.fillRect(x + si * sw, y, sw, bkH);
+            g.fillRect(x, y + si * sh, bkW, sh);
           });
         } else {
           g.fillStyle = 'rgb(20,20,20)';
