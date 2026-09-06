@@ -401,7 +401,7 @@ function buildChGrid() {
 function chOnTrack(meta) {
   // ma2play 原则：切曲时一次性全扫定型——通道集合、各通道首个乐器/状态
   // 预解析；播放期间行数与乐器名（粘性）不再增删重置。
-  for (const c of chVis.chans) { c.ev = []; c.notes = []; c.ei = 0; c.pc = -1; c.vol = 100; c.pan = 64; c.exp = 127; c.last = '--'; c.note = -1; c.act = false; c.used = false; c.progShown = ''; }
+  for (const c of chVis.chans) { c.ev = []; c.notes = []; c.ei = 0; c.pc = -1; c.vol = 100; c.pan = 64; c.exp = 127; c.last = '--'; c.note = -1; c.act = false; c.used = false; c.progShown = ''; c.bankM = 0; c.bankL = 0; }
   for (const e of meta?.chEv ?? []) { const c = chVis.chans[e.ch]; if (c) { c.ev.push(e); c.used = true; } }
   for (const n of meta?.notes ?? []) { const c = chVis.chans[n.ch]; if (c) { c.notes.push(n); c.used = true; } }
   for (const c of chVis.chans) {
@@ -410,10 +410,18 @@ function chOnTrack(meta) {
     for (const e of c.ev) { if (c.pc < 0 && e.k === 'PC') c.pc = e.pc; if (c.pc < 0) break; }
     for (const e of c.ev) { if (e.k === 'CC') { if (e.cc === 7) { c.vol = e.v; break; } } }
   }
-  // 只显示用到的通道（数量切曲时定型）+ 分版本的非 MIDI 通道行（ma2play 设计）
+  // 分组标题 + 只显示用到的通道（数量切曲时定型）+ 分版本的非 MIDI 通道行（ma2play 设计）
   const tb = $('chTable');
   tb.querySelectorAll('tbody').forEach(b => b.remove());
   const body = document.createElement('tbody');
+  const addGroup = title => {
+    const tr = document.createElement('tr');
+    tr.className = 'chgroup';
+    tr.innerHTML = `<td colspan="7">${title}</td>`;
+    body.appendChild(tr);
+  };
+  let anyMidi = chVis.chans.some(c => c.used);
+  if (anyMidi) addGroup('MIDI Channels');
   chVis.chans.forEach((c, i) => {
     if (!c.used) return;
     const tr = document.createElement('tr');
@@ -423,7 +431,7 @@ function chOnTrack(meta) {
     tr.innerHTML = `<td>Ch${i}</td><td class="prog">—</td><td class="note">--</td><td class="vol">--</td><td class="pan">--</td><td class="exp">--</td><td class="evt">--</td>`;
     body.appendChild(tr);
   });
-  buildNonMidiRows(body, meta);
+  buildNonMidiRows(body, meta, addGroup);
   tb.appendChild(body);
   // 日志摘要
   const nNotes = meta?.notes?.length ?? 0;
@@ -439,46 +447,64 @@ function chOnTrack(meta) {
 const ROW_COLORS = { atr: 'rgb(230,179,77)', ext: 'rgb(79,199,230)', mwa: 'rgb(217,140,230)', stream: 'rgb(230,171,79)' };
 /* PCM 行 8 色板（ma2play kPcmRowCol，与音量条同色系） */
 const PCM_ROW_COLORS = ['rgb(120,230,181)', 'rgb(181,140,240)', 'rgb(240,140,181)', 'rgb(140,219,240)', 'rgb(219,199,120)', 'rgb(181,240,140)', 'rgb(240,161,219)', 'rgb(161,199,219)'];
-function buildNonMidiRows(body, meta) {
-  const addRow = (label, color, cells) => {
+function buildNonMidiRows(body, meta, addGroup) {
+  chVis.extra = [];
+  const addRow = (id, label, color, cells, desc) => {
     const tr = document.createElement('tr');
+    tr.id = 'xrow-' + id;
     tr.className = 'chrow extra';
     tr.style.borderLeft = `3px solid ${color}`;
     tr.innerHTML = `<td>${label}</td><td class="prog">${cells.prog ?? '--'}</td><td class="note">${cells.note ?? '--'}</td><td>${cells.vol ?? '--'}</td><td>${cells.pan ?? '--'}</td><td>${cells.exp ?? '--'}</td><td class="evt">${cells.evt ?? '--'}</td>`;
     body.appendChild(tr);
+    tr.dataset.baseEvt = cells.evt ?? '--';
+    tr.children[2].dataset.baseNote = cells.note ?? '--';
+    chVis.extra.push({ id, ...desc, tr, noteShown: '' });
   };
   const ma = meta?.version ?? 0;
   // ATR 行：showAtrRows = !(MA>=3)——MA-2 恒显两条（ma2play 同款，不按 atrCount）
   if (ma <= 2) {
+    addGroup('ADPCM Tracks (ATR)');
     for (let a = 0; a < 2; a++)
-      addRow('ATR' + a, ROW_COLORS.atr, { prog: 'ADPCM Stream', note: '#' + a, evt: 'adpcm' });
+      addRow('atr' + a, 'ATR' + a, ROW_COLORS.atr,
+        { prog: 'ADPCM Stream', note: '#' + a, evt: 'adpcm' },
+        { kind: 'atr', idx: a, hasData: (meta?.atrCount ?? 0) > a });
   }
   // PCM 行 P0-7：仅 MA-3、只留 ROM 鼓（ext/Mwa 归 wave 行）；静态鼓音枚举
   if (ma === 3) {
     const drums = [...new Set((meta?.notes ?? []).filter(n => n.ch === 9).map(n => n.note))].slice(0, 8);
+    if (drums.length) addGroup('PCM ROM Drums');
     drums.forEach((dn, i) =>
-      addRow('P' + i, PCM_ROW_COLORS[i % 8], { prog: GM_DRUMS[dn] ?? 'ROM Drum', note: noteName(dn), evt: 'rom' }));
+      addRow('pcm' + i, 'P' + i, PCM_ROW_COLORS[i % 8],
+        { prog: GM_DRUMS[dn] ?? 'ROM Drum', note: noteName(dn), evt: 'rom' },
+        { kind: 'pcm', noteNum: dn }));
   }
   // WAVE 行（MA≥3，MwaSlot 定型）：ext=e<waveID> / mwa=m<idx>；Note=同类内 #seq
-  if (ma >= 3) {
+  if (ma >= 3 && (meta?.waves ?? []).length) {
+    addGroup('WAVE Channels');
     const seq = { ext: 0, mwa: 0 };
-    (meta?.waves ?? []).slice(0, 10).forEach(w => {
+    meta.waves.slice(0, 10).forEach((w, wi) => {
       const isMwa = w.src === 'Mwa';
       const kind = isMwa ? 'mwa' : 'ext';
-      addRow(isMwa ? 'm' + (w.id ?? 0) : 'e' + (w.id ?? 0),
+      addRow('wave' + wi, isMwa ? 'm' + (w.id ?? 0) : 'e' + (w.id ?? 0),
         ROW_COLORS[kind],
-        { prog: isMwa ? 'Mwa Chunk' : 'Inline Wave', note: '#' + (seq[kind]++), evt: kind });
+        { prog: isMwa ? 'Mwa Chunk' : 'Inline Wave', note: '#' + (seq[kind]++), evt: kind },
+        { kind: 'wave', src: kind });
     });
   }
+  // PCM/Wave 音色表：channel 当前 (bankL,pc) 命中非 FM 音色 → 该通道发声时激活 ext wave 行
+  chVis.pcmVoices = new Set(
+    (meta?.voices ?? []).filter(v => v.vtype && v.vtype !== 'FM' && v.pc !== undefined)
+      .map(v => (v.bankL ?? 0) + ':' + v.pc));
 }
 
 function updateChTable(tSec) {
+  const activeNotes = [];
   chVis.chans.forEach((c, i) => {
     if (!c.used) return;
     while (c.ei < c.ev.length && c.ev[c.ei].t <= tSec) {
       const e = c.ev[c.ei++];
       if (e.k === 'PC') c.pc = e.pc;
-      else if (e.k === 'CC') { if (e.cc === 7) c.vol = e.v; else if (e.cc === 10) c.pan = e.v; else if (e.cc === 11) c.exp = e.v; }
+      else if (e.k === 'CC') { if (e.cc === 7) c.vol = e.v; else if (e.cc === 10) c.pan = e.v; else if (e.cc === 11) c.exp = e.v; else if (e.cc === 0) c.bankM = e.v; else if (e.cc === 32) c.bankL = e.v; }
       if (e.k !== 'Note') c.last = e.k;
     }
     let note = -1;
@@ -488,6 +514,7 @@ function updateChTable(tSec) {
       if (n.end > tSec) note = n.note;
     }
     c.act = note >= 0;
+    if (c.act) activeNotes.push({ ch: i, note });
     const tr = $('chrow' + i);
     if (!tr) return;
     const tds = tr.children;
@@ -501,6 +528,40 @@ function updateChTable(tSec) {
     tds[5].textContent = c.exp;
     tds[6].textContent = c.act ? 'Note' : c.last;
   });
+  updateExtraRows(tSec, activeNotes);
+}
+
+/* 非 MIDI 行播放期更新（parser 静态数据 + 音符归因，AudioWorklet 快照前的过渡方案）：
+ * ATR = 音轨存在且正在播放即激活；PCM P 行 = 对应鼓音正在发声；
+ * wave 行 = 通道当前 (bankL,pc) 命中非 FM 音色且正在发声（ext 行，mwa 无触发时序暂不归因）。 */
+function updateExtraRows(tSec, activeNotes) {
+  if (!chVis.extra?.length) return;
+  const drumNotes = activeNotes.filter(a => a.ch === 9);
+  // 通道 → 当前 bankL:pc（沿用 MIDI 行已推进的状态）
+  const pcmChNote = activeNotes.map(a => {
+    const c = chVis.chans[a.ch];
+    return (c && chVis.pcmVoices?.has((c.bankL ?? 0) + ':' + (c.pc ?? -1))) ? a : null;
+  }).filter(Boolean);
+  const extAct = pcmChNote.length > 0;
+  for (const x of chVis.extra) {
+    let act = false, noteTxt = null, evt = null;
+    if (x.kind === 'atr') { act = x.hasData && S.playing; if (act) evt = 'play'; }
+    else if (x.kind === 'pcm') {
+      act = drumNotes.some(d => d.note === x.noteNum);
+      if (act) { noteTxt = noteName(x.noteNum); evt = 'hit'; }
+    } else if (x.kind === 'wave') {
+      if (x.src === 'ext' && extAct) {
+        act = true;
+        noteTxt = noteName(pcmChNote[pcmChNote.length - 1].note);
+        evt = 'wave';
+      }
+    }
+    x.tr.classList.toggle('on', act);
+    const tds = x.tr.children;
+    if (noteTxt !== null && noteTxt !== x.noteShown) { x.noteShown = noteTxt; tds[2].textContent = noteTxt; }
+    else if (noteTxt === null && x.noteShown) { x.noteShown = ''; tds[2].textContent = tds[2].dataset.baseNote ?? (tds[2].dataset.baseNote = tds[2].textContent); }
+    tds[6].textContent = evt ?? x.tr.dataset.baseEvt;
+  }
 }
 
 /* ---------------- 文件浏览器 ---------------- */
