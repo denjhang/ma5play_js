@@ -395,85 +395,100 @@ const noteName = n => n >= 0 && n <= 127 ? NOTE_NAMES[n % 12] + ((n / 12 | 0) - 
 const chVis = { chans: [] };
 
 function buildChGrid() {
-  const tb = $('chTable');
-  tb.innerHTML = `<colgroup><col style="width:9%"><col style="width:34%"><col style="width:17%"><col style="width:8%"><col style="width:9%"><col style="width:8%"><col style="width:15%"></colgroup><thead><tr><th>Ch</th><th>Prog</th><th>Note</th><th>Vol</th><th>Pan</th><th>Exp</th><th>Event</th></tr></thead>`;
-  const body = document.createElement('tbody');
-  for (let i = 0; i < 16; i++) {
-    const tr = document.createElement('tr');
-    tr.id = 'chrow' + i;
-    tr.innerHTML = `<td>Ch${i}</td><td class="prog">—</td><td class="note">--</td><td class="vol">--</td><td class="pan">--</td><td class="exp">--</td><td class="evt">--</td>`;
-    body.appendChild(tr);
-  }
-  tb.appendChild(body);
-  chVis.chans = Array.from({ length: 16 }, () => ({ ev: [], ei: 0, notes: [], ni: 0, pc: -1, vol: 100, pan: 64, exp: 127, last: '--', note: -1, act: false }));
+  $('chTable').innerHTML = `<colgroup><col style="width:9%"><col style="width:34%"><col style="width:17%"><col style="width:8%"><col style="width:9%"><col style="width:8%"><col style="width:15%"></colgroup><thead><tr><th>Ch</th><th>Prog</th><th>Note</th><th>Vol</th><th>Pan</th><th>Exp</th><th>Event</th></tr></thead>`;
+  chVis.chans = Array.from({ length: 16 }, () => ({ ev: [], notes: [], ei: 0, pc: -1, vol: 100, pan: 64, exp: 127, last: '--', act: false, used: false, progShown: '' }));
 }
-function buildWaveRows(waves) {
+function buildWaveRows(meta) {
   let sec = document.getElementById('waveRows');
   if (sec) sec.remove();
-  if (!waves?.length) return;
+  const voices = meta?.voices ?? [], waves = meta?.waves ?? [];
+  if (!voices.length && !waves.length) return;
   const tb = $('chTable');
   sec = document.createElement('tbody');
   sec.id = 'waveRows';
-  const hdr = document.createElement('tr');
-  hdr.innerHTML = `<td colspan="7" style="color:var(--accent2);font-weight:600;padding-top:4px">PCM Waves (ext / Mwa / inline)</td>`;
-  sec.appendChild(hdr);
-  waves.slice(0, 12).forEach((w, i) => {
-    const tr = document.createElement('tr');
-    const idTxt = w.id !== undefined ? `#${w.id}` : `M${i}`;
-    const typeTxt = w.src === 'Mwa'
-      ? (w.type === 1 ? 'Awa (stream)' : w.type === 2 ? 'Mwa stream' : w.type === 3 ? 'MSTR' : `Mwa t${w.type}`)
-      : w.form === '7F03' ? 'ext PCM (43 79 07 7F 03)' : 'wave data (43 05 00)';
-    tr.innerHTML = `<td>W${i}</td><td class="prog">${typeTxt}</td><td class="note">${idTxt}</td><td>${w.hz ? w.hz + 'Hz' : '--'}</td><td>${w.stereo ? 'st' : 'mo'}</td><td>--</td><td class="evt">${(w.size / 1024).toFixed(1)}K</td>`;
-    sec.appendChild(tr);
-  });
-  if (waves.length > 12) {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td colspan="7" style="color:var(--dim)">… +${waves.length - 12} more</td>`;
-    sec.appendChild(tr);
+  const add = html => { const tr = document.createElement('tr'); tr.innerHTML = html; sec.appendChild(tr); };
+  if (voices.length) {
+    add(`<td colspan="7" style="color:var(--accent2);font-weight:600;padding-top:4px">Voices (SysEx registry, ${voices.length})</td>`);
+    voices.slice(0, 8).forEach((v, i) => {
+      add(`<td>V${i}</td><td class="prog">${v.kind}</td><td class="note">${v.vtype ?? '--'}</td><td>${v.bankM ?? v.bankL ?? '--'}/${v.pc ?? '--'}</td><td>${v.drum ?? '--'}</td><td>--</td><td class="evt">static</td>`);
+    });
   }
+  if (waves.length) {
+    add(`<td colspan="7" style="color:var(--accent2);font-weight:600;padding-top:4px">PCM Waves (registry, ${waves.length})</td>`);
+    waves.slice(0, 8).forEach((w, i) => {
+      const kind = w.kind ?? (w.src === 'Mwa' ? (w.type === 1 ? 'Awa (stream)' : w.type === 2 ? 'Mwa stream' : w.type === 3 ? 'MSTR' : `Mwa t${w.type}`) : w.src);
+      add(`<td>W${i}</td><td class="prog">${kind}</td><td class="note">${w.id !== undefined ? '#' + w.id : 'M' + i}</td><td>${w.hz ? w.hz + 'Hz' : '--'}</td><td>${w.stereo ? 'st' : 'mo'}</td><td>--</td><td class="evt">${w.size ? (w.size / 1024).toFixed(1) + 'K' : '--'}</td>`);
+    });
+  }
+  if (voices.length + waves.length > 16)
+    add(`<td colspan="7" style="color:var(--dim)">… registry truncated (view log for full list)</td>`);
   tb.appendChild(sec);
 }
 function chOnTrack(meta) {
-  // 载入即出解析摘要日志（静态对照用，带曲目时间标记）
+  // ma2play 原则：切曲时一次性全扫定型——通道集合、各通道首个乐器/状态
+  // 预解析；播放期间行数与乐器名（粘性）不再增删重置。
+  for (const c of chVis.chans) { c.ev = []; c.notes = []; c.ei = 0; c.pc = -1; c.vol = 100; c.pan = 64; c.exp = 127; c.last = '--'; c.note = -1; c.act = false; c.used = false; c.progShown = ''; }
+  for (const e of meta?.chEv ?? []) { const c = chVis.chans[e.ch]; if (c) { c.ev.push(e); c.used = true; } }
+  for (const n of meta?.notes ?? []) { const c = chVis.chans[n.ch]; if (c) { c.notes.push(n); c.used = true; } }
+  for (const c of chVis.chans) {
+    c.ev.sort((a, b) => a.t - b.t); c.notes.sort((a, b) => a.t - b.t);
+    // 全扫：取首个 PC/CC 作为初始显示（粘性起点，不等时间轴到达）
+    for (const e of c.ev) { if (c.pc < 0 && e.k === 'PC') c.pc = e.pc; if (c.pc < 0) break; }
+    for (const e of c.ev) { if (e.k === 'CC') { if (e.cc === 7) { c.vol = e.v; break; } } }
+  }
+  // 只显示用到的通道（数量切曲时定型）
+  const tb = $('chTable');
+  tb.querySelectorAll('tbody:not(#waveRows)').forEach(b => b.remove());
+  const body = document.createElement('tbody');
+  chVis.chans.forEach((c, i) => {
+    if (!c.used) return;
+    const tr = document.createElement('tr');
+    tr.id = 'chrow' + i;
+    tr.className = 'chrow';
+    tr.style.borderLeft = `3px solid rgb(${CH_COLORS[i].join(',')})`;
+    tr.innerHTML = `<td>Ch${i}</td><td class="prog">—</td><td class="note">--</td><td class="vol">--</td><td class="pan">--</td><td class="exp">--</td><td class="evt">--</td>`;
+    body.appendChild(tr);
+  });
+  tb.appendChild(body);
+  buildWaveRows(meta);
+  // 日志摘要
   const nNotes = meta?.notes?.length ?? 0;
-  const usedCh = [...new Set((meta?.notes ?? []).map(n => n.ch))].sort((a, b) => a - b);
+  const usedCh = chVis.chans.map((c, i) => c.used ? i : -1).filter(i => i >= 0);
   const last = meta?.notes?.length ? meta.notes.reduce((m2, n) => n.end > m2 ? n.end : m2, 0) : 0;
   log(`[vis] parsed: ${nNotes} notes, ch=[${usedCh.join(',')}], span 0→${last.toFixed(2)}s (dur ${(meta?.durationMs / 1000 || 0).toFixed(1)}s)`);
+  if (meta?.voices?.length || meta?.waves?.length)
+    log(`[vis] registry: ${meta.voices?.length ?? 0} voices (${[...new Set(meta.voices?.map(v => v.kind) ?? [])].join('+')}), ${meta.waves?.length ?? 0} waves (${[...new Set(meta.waves?.map(w => w.kind) ?? [])].join('+')})`);
   if (!nNotes) log('[vis] ⚠ no notes parsed (compressed/SEQU format not supported for piano)');
-  buildWaveRows(meta?.waves);
-  if (meta?.waves?.length) log(`[vis] PCM waves: ${meta.waves.length} registered (${[...new Set(meta.waves.map(w => w.src))].join('+')})`);
-  for (const c of chVis.chans) { c.ev = []; c.notes = []; c.ei = 0; c.ni = 0; c.pc = -1; c.vol = 100; c.pan = 64; c.exp = 127; c.last = '--'; c.note = -1; c.act = false; }
-  for (const e of meta?.chEv ?? []) chVis.chans[e.ch]?.ev.push(e);
-  for (const n of meta?.notes ?? []) chVis.chans[n.ch]?.notes.push(n);
-  for (const c of chVis.chans) { c.ev.sort((a, b) => a.t - b.t); c.notes.sort((a, b) => a.t - b.t); }
 }
 function updateChTable(tSec) {
-  for (let i = 0; i < 16; i++) {
-    const c = chVis.chans[i];
+  chVis.chans.forEach((c, i) => {
+    if (!c.used) return;
     while (c.ei < c.ev.length && c.ev[c.ei].t <= tSec) {
       const e = c.ev[c.ei++];
       if (e.k === 'PC') c.pc = e.pc;
-      else if (e.k === 'CC') { if (e.cc === 7) c.vol = e.v; else if (e.cc === 10) c.pan = e.v; else if (e.cc === 11) c.exp = e.v; else if (e.cc === 0) c.last = 'Bank'; }
+      else if (e.k === 'CC') { if (e.cc === 7) c.vol = e.v; else if (e.cc === 10) c.pan = e.v; else if (e.cc === 11) c.exp = e.v; }
       if (e.k !== 'Note') c.last = e.k;
     }
-    // 当前音符：最近的 note-on 且未结束
     let note = -1;
-    for (let j = c.ni; j < c.notes.length; j++) {
+    for (let j = 0; j < c.notes.length; j++) {
       const n = c.notes[j];
       if (n.t > tSec) break;
       if (n.end > tSec) note = n.note;
     }
     c.act = note >= 0;
     const tr = $('chrow' + i);
+    if (!tr) return;
     const tds = tr.children;
-    tr.classList.toggle('on', c.act || c.pc >= 0);
-    tds[1].textContent = i === 9 ? 'Drums' : c.pc >= 0 ? `${c.pc} ${GM_NAMES[c.pc] ?? '?'}` : '—';
+    tr.classList.toggle('on', c.act);
+    // 乐器名粘性：一旦确定不再回退默认；仅在变化时写 DOM（布局稳定）
+    const progTxt = i === 9 ? 'Drums' : c.pc >= 0 ? `${c.pc} ${GM_NAMES[c.pc] ?? '?'}` : '—';
+    if (progTxt !== c.progShown) { c.progShown = progTxt; tds[1].textContent = progTxt; tds[1].title = progTxt; }
     tds[2].textContent = note >= 0 ? (i === 9 ? (GM_DRUMS[note] ?? noteName(note)) : noteName(note)) : '--';
     tds[3].textContent = c.vol;
     tds[4].textContent = c.pan === 64 ? 'C' : (c.pan > 64 ? 'R' + (c.pan - 64) : 'L' + (64 - c.pan));
     tds[5].textContent = c.exp;
     tds[6].textContent = c.act ? 'Note' : c.last;
-  }
+  });
 }
 
 /* ---------------- 文件浏览器 ---------------- */

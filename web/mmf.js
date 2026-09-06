@@ -279,38 +279,54 @@ function parseTrack(u8, off, size, chBase, out) {
     p += csz;
   }
 }
-/* SysEx 波形注册检测（D500/D520 内嵌波：43 79 07 7F 03 waveId / 43 05 00 waveId） */
-function scanWaveSysEx(excls, waves) {
+/* SysEx 全类型细分（ymf825emu parse_exclusive 同款语义）：
+ * 声音注册（voices）+ 波形数据（waves） */
+function scanExclusives(excls, out) {
   for (const d of excls) {
-    if (d.length >= 6 && d[0] === 0x43 && d[1] === 0x79 && d[2] === 0x07 && d[3] === 0x7F && d[4] === 0x03)
-      waves.push({ src: 'Inline', form: '7F03', type: 4, id: d[5], stereo: false, hz: 0, size: d.length - 6 });
-    else if (d.length >= 4 && d[0] === 0x43 && d[1] === 0x05 && d[2] === 0x00)
-      waves.push({ src: 'Inline', form: '0500', type: 4, id: d[3], stereo: false, hz: 0, size: d.length - 4 });
+    const L = d.length;
+    if (L >= 10 && d[0] === 0x43 && d[1] === 0x79 && d[2] === 0x07 && d[3] === 0x7F && d[4] === 0x01)
+      out.voices.push({ kind: 'MA-5 Voice', bankM: d[5], bankL: d[6], pc: d[7], drum: d[8], vtype: d[9] === 0 ? 'FM' : 'PCM' });
+    else if (L >= 10 && d[0] === 0x43 && d[1] === 0x79 && d[2] === 0x06 && d[3] === 0x7F && d[4] === 0x01)
+      out.voices.push({ kind: 'MA-3 Voice', bankM: d[5], bankL: d[6], pc: d[7], drum: d[8], vtype: (d[9] & 1) ? 'WaveTable' : 'FM' });
+    else if (L >= 6 && d[0] === 0x43 && d[1] === 0x79 && d[2] === 0x07 && d[3] === 0x7F && d[4] === 0x03)
+      out.waves.push({ kind: 'MA-5 PCM waveform (ext)', form: '7F03', id: d[5], size: L - 6 });
+    else if (L >= 6 && d[0] === 0x43 && d[1] === 0x79 && d[2] === 0x06 && d[3] === 0x7F && d[4] === 0x03)
+      out.waves.push({ kind: 'MA-3 PCM waveform', id: d[5], size: L - 6 });
+    else if (L >= 5 && d[0] === 0x43 && d[1] === 0x05 && d[2] === 0x01)
+      out.voices.push({ kind: 'MA-5 FM Voice', bankL: d[3], pc: d[4], vtype: 'FM' });
+    else if (L >= 5 && d[0] === 0x43 && d[1] === 0x05 && d[2] === 0x02)
+      out.voices.push({ kind: 'MA-5 PCM Voice', bankL: d[3], pc: d[4], drum: (d[3] & 0x80) !== 0, vtype: 'PCM' });
+    else if (L >= 4 && d[0] === 0x43 && d[1] === 0x05 && d[2] === 0x00)
+      out.waves.push({ kind: 'MA-5 Wave data', form: '0500', id: d[3], size: L - 4 });
+    else if (L >= 5 && d[0] === 0x43 && d[1] === 0x04 && d[2] === 0x01)
+      out.voices.push({ kind: 'MA-5 4-op compact', vtype: 'FM' });
+    else if (L >= 5 && d[0] === 0x43 && d[1] === 0x03)
+      out.voices.push({ kind: 'MA-2 Voice (VMA)', bankL: d[3], pc: d[4], vtype: 'FM' });
+    else if (L >= 5 && d[0] === 0x43 && d[1] === 0x02 && d[2] === 0x02)
+      out.voices.push({ kind: 'SoftBank MA-5 legacy', vtype: 'PCM' });
   }
 }
-
-/* -------- CNTI（parse_cnti + optional fields + Mx: 版本）-------- */
-function parseCnti(u8, off, size, out) {
+/* CNTI 标题：code_type!=0 时为逗号分隔 "ST:标题" 文本；=0 时为 tag+u16len 对 */
+function parseCntiTitle(u8, off, size, out) {
   if (size < 5) return;
   const end = off + size;
-  out.cntiStream = u8.slice(off + 5, end);
-  const txt = s => { let r = ''; for (const c of s) if (c >= 0x20 && c < 0x7F) r += String.fromCharCode(c); return r; };
-  if (u8[off + 2] !== 0x00) {                   // 逗号分隔 tag:value 文本
-    const s = txt(out.cntiStream);
+  const ascii = (a, b) => { let r = ''; for (let i = a; i < b; i++) { const c = u8[i]; if (c >= 0x20 && c < 0x7F) r += String.fromCharCode(c); } return r; };
+  if (u8[off + 2] !== 0x00) {
+    const s = ascii(off + 5, end);
     const grab = tag => { const m = s.match(new RegExp(`(?:^|,)${tag}:([^,]*)`)); return m ? m[1].trim() : ''; };
     out.title = grab('ST'); out.artist = grab('AN');
     return;
   }
-  // tag(2) + u16len 对
-  let i = 0; const st = out.cntiStream;
-  while (i + 4 < st.length) {
-    const tag = String.fromCharCode(st[i], st[i + 1]); i += 2;
-    const sz = (st[i] << 8) | st[i + 1]; i += 2;
-    if (i + sz > st.length) break;
-    const val = txt(st.subarray(i, i + sz));
+  let i = off + 5; const st = u8.slice(off + 5, end);
+  let j = 0;
+  while (j + 4 < st.length) {
+    const tag = String.fromCharCode(st[j], st[j + 1]); j += 2;
+    const sz = (st[j] << 8) | st[j + 1]; j += 2;
+    if (j + sz > st.length) break;
+    const val = ascii(j, j + sz);
     if (tag === 'ST') out.title = val;
     if (tag === 'AN') out.artist = val;
-    i += sz;
+    j += sz;
   }
 }
 function versionFromCnti(stream) {              // mmf_detect_version_from_cnti
@@ -342,12 +358,12 @@ export function parseMMF(buf) {
   let p = 8;
   const end = u8.length - 2;                    // 尾部 CRC
   let trackIdx = 0;
-  const out1 = { ...out, notes: [], excls: [], tracks: [], chEv: [], waves: [], durTb: 2, gateTb: 2, durMs: 0 };
+  const out1 = { ...out, notes: [], excls: [], tracks: [], chEv: [], waves: [], voices: [], durTb: 2, gateTb: 2, durMs: 0 };
   while (p + 8 <= end) {
     const sig = u32(u8, p), csz = u32(u8, p + 4);
     p += 8;
     if (p + csz > end) break;
-    if (sig === SIG.CNTI) parseCnti(u8, p, csz, out1);
+    if (sig === SIG.CNTI) parseCntiTitle(u8, p, csz, out1);
     else if ((sig & 0xFFFFFF00) === SIG.MTR) {
       const fmt = u8[p];
       const chBase = (fmt === 0) ? trackIdx * 4 : 0;   // HPS 多轨：全局通道 = c + t*4
@@ -378,7 +394,7 @@ export function parseMMF(buf) {
     }
     p += csz;
   }
-  scanWaveSysEx(out1.excls, out1.waves);
+  scanExclusives(out1.excls, out1);
   out1.version = versionFromCnti(out1.cntiStream ?? new Uint8Array(0)) || versionFromExcls(out1.excls);
   out1.maName = { 1: 'MA-1', 2: 'MA-2', 3: 'MA-3', 5: 'MA-5', 7: 'MA-7' }[out1.version] ?? 'Unknown';
   // 曲长 = 最后事件时间与最长音符结束的较大者

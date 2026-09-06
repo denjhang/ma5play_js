@@ -269,3 +269,17 @@ smaf_window.cpp Render() 确认真实布局并复刻：
   改用 **ctx.getOutputTimestamp().contextTime**——浏览器报告的"此刻正在
   发声"的真实音频时刻，直接作为可视化时钟基准（解析器对齐于此）。
 - 通道表布局稳定：table-layout fixed + colgroup 固定列宽，Prog 列省略号。
+
+### 通道表按 ma2play 设计原则重构
+- **切曲全扫定型**：chOnTrack 一次性预扫——用到的通道集合（本曲行数
+  定型，播放期间零增删）、各通道首个 PC/CC7 作初始显示；此前固定 16 行
+  且乐器名等时间轴到达才出现。
+- **乐器名粘性**：progShown 缓存，变化才写 DOM，永不回退默认"—"；
+  Prog 列 title 悬浮全名。
+- **通道色行**：每行左缘 3px 通道色（kChColors）；未激活行灰 #66748f，
+  激活行亮色 + 行底高亮（ma2play StatusArea 同款）。
+- **SysEx 注册表全细分**（ymf825emu parse_exclusive 全表移植）：
+  MA-5 Voice (bank/PC/drum/FM|PCM)、MA-3 Voice、MA-3/5 PCM waveform、
+  MA-5 FM/PCM Voice、Wave data、4-op compact、MA-2 VMA、SoftBank legacy；
+  + Mwa 块 Awa/Mwa stream/MSTR。表内 Voices/Waves 两个 registry 区。
+- 实测 Sound_1：11 行（仅用到通道）、7 voices + 4 waves 全部分类正确。
