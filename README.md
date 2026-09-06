@@ -138,27 +138,60 @@ the project's central equivalence proof.
 clean switching (the stop→fade→flush→load sequence with generation IDs),
 preroll gating, the ma2play-style UI, mobile layouts, staged progress.
 
-**Round 4 — visualization that tells the truth.** The piano was rebuilt
-on the real audio clock after discovering that subtracting
-`AudioContext.outputLatency` (1–2 s on some webviews) produced a
-*lagging* visualization; anchoring on `getOutputTimestamp()` fixed it.
+**Round 4–6 — visualization: the long fight.** The synchronization and
+routing work went through more iterations than everything else in the
+project combined, and each round failed in a different way before the
+methodology caught up.
 
-**Round 5 — the parser is rewritten by evidence.** Users reported missing
-notes. We copied the three version-specific reference sequencer sources
-(`libymf825_ma2/3/5`) into `ref/`, compiled the real C++ tools, and
-diffed the JS parser against them file-by-file across all 1,484 corpus
-files. Five decoder bugs fell out — most dramatically: Note-Off events
-(`0x8X`) in Mobile format are *note events* with inherited velocity;
-treating them as no-ops had silently dropped **80% of all notes**
-(507 → 2,582 notes on one test track). Result: 1484/1484 files now match
-the C++ parser exactly.
+*The clock.* First the piano simply didn't move; when it did, it lagged
+the music by two seconds. The initial fix — subtracting
+`AudioContext.outputLatency` — made it worse, because some webviews
+report 1–2 s of fiction there. The correct anchor turned out to be
+`AudioContext.getOutputTimestamp()`, interpolated against a calibration
+point taken inside the audio callback: the UI now tracks the *actual
+sound output moment*. After this landed, MA-3 content syncs within tens
+of milliseconds — keys light as you hear the note.
 
-**Round 6 — route every note like the synth does.** The channel table was
-rewired through a port of the sequencer's `noteOn` decision tree: FM vs
-ROM drum vs ext waveform vs Mwa stream, with voice→waveform links decoded
-from the SysEx packets exactly as the C++ does (7-bit packed parameters
-for MA-3, raw 16-byte payloads for MA-5). Drums now light the PCM rows —
-including MA-5, which the reference GUI had left unfinished.
+*The data.* Notes were being lost wholesale and nobody could tell from
+the UI. The decisive move was refusing to debug inside the browser:
+every claim had to be established by **static parsing first** — dump the
+parser's output over the corpus, compare against the compiled C++
+reference tools, and only then touch the page. That discipline (learned
+the hard way, after several rounds of UI-side guessing that wasted
+everyone's patience) exposed the real culprits: Note-Off events (`0x8X`)
+in Mobile format are note events with inherited velocity, Huffman-
+compressed tracks were decoded but never dispatched, SEQU phrases inside
+MMMG containers weren't parsed at all, and one missing `rest--` in the
+SysEx reader desynced the stream and fabricated phantom notes. One test
+track went from 507 parsed notes to 2,582 — matching the C++ parser
+exactly — and the piano came alive.
+
+*The routing.* With every note present, the channel table was still
+wrong: drums lighting MIDI channel 9 instead of the PCM rows, every
+ext-waveform row showing the same pitch, MA-5 Mwa streams never lighting
+at all. The answer was to stop inventing heuristics and port the
+reference sequencer's actual `noteOn` decision tree — bank-select
+semantics per MA version (MA-3/MA-5 drum channels, the MA-5 stream
+trigger `note < Mwa count`), voice→waveform links decoded from the SysEx
+packets byte-for-byte as the C++ does. That also settled a design
+question with evidence: MA-5 uses the same PCM ROM drums as MA-3 (the
+reference GUI simply hadn't finished that part), so both versions get
+drum rows now.
+
+*The stability rules.* Once routing was right, the table itself needed
+rules that had been missing from the start, each one added after a
+visible defect: rows are grouped by sound type (MIDI / PCM ROM Drums /
+WAVE / ATR) instead of one undifferentiated list; the row set and
+instrument names are decided by a single full scan at track load and
+never mutate during playback; every cell is sticky within a track — an
+inactive row keeps its last note and event instead of flashing back to
+placeholders (the "flickering Mwa" bug); and channels never light unless
+their *routed* voice class actually sounds.
+
+The lesson that cost the most temper and paid back the most: **when the
+reference implementation exists, read all of it, then diff against it
+mechanically.** Every visualization bug that survived a round of
+reasoning died immediately when confronted with the C++ ground truth.
 
 **Round 7 — ship it.** Corpus embedded (34 MB, 1,484 tracks), static
 GitHub Pages mode with automatic `/api` fallback, MIT license, release
