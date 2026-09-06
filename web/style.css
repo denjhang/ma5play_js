@@ -23,7 +23,7 @@ body {
 .top {
   display: flex; align-items: center; justify-content: space-between;
   padding: 12px 18px; border-bottom: 1px solid var(--line);
-  position: sticky; top: 0; z-index: 5;
+  position: sticky; top: 0; z-index: 5;   /* sticky 也是定位锚，loadbar 可挂下缘 */
   background: color-mix(in srgb, var(--bg) 80%, transparent);
   backdrop-filter: blur(8px);
 }
@@ -90,11 +90,21 @@ body {
 
 /* ---------- 文件浏览器 ---------- */
 .browser { flex: 1.4; display: flex; flex-direction: column; min-width: 0; }
-.transport { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.transport { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.t-row { display: flex; align-items: center; gap: 6px; }
+.t-mid { margin-left: auto; display: flex; align-items: baseline; }
+.t-mid-row .progress { flex: 1; }
 .transport .ctl { min-width: 40px; height: 40px; font-size: 15px; }
 .transport .time { font-variant-numeric: tabular-nums; color: var(--dim); font-size: 13px; margin-left: 4px; }
 .transport .time.dim { color: #5a6580; }
 .transport input[type=range] { width: 90px; accent-color: var(--accent); }
+
+/* 核心加载进度条 */
+.loadbar {
+  position: absolute; left: 0; right: 0; top: 100%; height: 3px;
+  background: var(--panel2); overflow: hidden;
+}
+.loadfill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width .2s; }
 .progress { flex: 1; height: 6px; background: var(--panel2); border-radius: 99px; overflow: hidden; }
 .progress .bar { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--accent2)); }
 
@@ -155,9 +165,20 @@ body {
 
 @media (max-width: 1100px) { .statuspanel { display: none; } }
 @media (max-width: 820px) {
-  .layout { flex-direction: column; }
+  .layout { flex-direction: column; padding: 8px; gap: 8px; }
   .side { width: 100%; }
   .toprow { flex-direction: column; }
   .bottomrow { flex-direction: column; }
-  .logpanel { max-height: 200px; }
+  .logpanel { max-height: 180px; }
+  .top { padding: 8px 12px; }
+  .brand { font-size: 15px; }
+  /* 传输条：按钮行 + 进度行自适应，触控目标 ≥40px */
+  .t-row { flex-wrap: nowrap; }
+  .transport .ctl { min-width: 42px; height: 42px; }
+  .t-mid { margin-left: auto; font-size: 12px; }
+  .t-mid-row input[type=range] { width: 84px; }
+  #piano { height: 96px; }
+  .nav { min-width: 40px; height: 40px; }
+  .crumbs { font-size: 11px; }
+  .list li { font-size: 14px; min-height: 42px; }
 }

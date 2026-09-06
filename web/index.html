@@ -13,6 +13,7 @@
   <div class="brand"><img class="logo" src="assets/icon.png" alt="ma2play icon"> ma5play
     <span class="tag">MA-5 · WASM</span></div>
   <div class="status" id="status">加载核心…</div>
+  <div class="loadbar" id="loadbar" hidden><div class="loadfill" id="loadfill"></div></div>
 </header>
 
 <main class="layout">
@@ -57,16 +58,22 @@
       <div class="panel browser">
         <!-- 传输条（ma2play SMAF Player header 同位置：浏览器面板顶部） -->
         <div class="transport">
-          <button class="ctl" id="btnPrev" title="上一曲">⏮</button>
-          <button class="ctl" id="btnPlay" title="播放/暂停">▶</button>
-          <button class="ctl" id="btnNext" title="下一曲">⏭</button>
-          <button class="ctl" id="btnStop" title="停止">⏹</button>
-          <button class="ctl" id="btnLoop" title="循环">↻</button>
-          <span class="time" id="timeCur">0:00</span>
-          <span class="time dim" id="timeEnd">/ --:--</span>
-          <div class="progress"><div class="bar" id="bar"></div></div>
-          <button class="ctl small" id="btnMute" title="静音">🔊</button>
-          <input type="range" id="vol" min="0" max="100" value="80" title="音量">
+          <div class="t-row">
+            <button class="ctl" id="btnPrev" title="上一曲">⏮</button>
+            <button class="ctl" id="btnPlay" title="播放/暂停">▶</button>
+            <button class="ctl" id="btnNext" title="下一曲">⏭</button>
+            <button class="ctl" id="btnStop" title="停止">⏹</button>
+            <button class="ctl" id="btnLoop" title="循环">↻</button>
+            <div class="t-mid">
+              <span class="time" id="timeCur">0:00</span>
+              <span class="time dim" id="timeEnd">/ --:--</span>
+            </div>
+          </div>
+          <div class="t-row t-mid-row">
+            <div class="progress"><div class="bar" id="bar"></div></div>
+            <button class="ctl small" id="btnMute" title="静音">🔊</button>
+            <input type="range" id="vol" min="0" max="100" value="80" title="音量">
+          </div>
         </div>
         <!-- 导航 -->
         <div class="navrow">

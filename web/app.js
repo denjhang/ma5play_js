@@ -43,7 +43,14 @@ function bootWorker() {
   worker.onmessage = e => {
     const m = e.data;
     if (m.id !== undefined && m.id !== S.loadId) return;   // 旧代消息：切曲后迟到，丢弃
+    if (m.type === 'progress') {
+      $('loadbar').hidden = false;
+      $('loadfill').style.width = m.pct + '%';
+      status(`${m.label} ${m.pct}%`, m.pct >= 100);
+      return;
+    }
     if (m.type === 'ready') {
+      $('loadbar').hidden = true;
       S.workerReady = true;
       $('chipMode').textContent = m.compact ? 'compact 预载' : 'flat';
       status('核心就绪（worker）', true);

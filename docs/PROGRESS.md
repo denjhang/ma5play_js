@@ -201,3 +201,14 @@ smaf_window.cpp Render() 确认真实布局并复刻：
 ### 记入 AGENTS.md 铁律
 - ma5t 泵块尺寸是行为参数：必须 960 帧/20ms（GUI 同款），改它会破坏
   效果链数值输出。
+
+## 2026-09-06（六）— 核心加载进度条 + 手机竖屏布局
+
+- 加载进度：worker 流式 fetch wasm（Content-Length 计 2~45%）+ 编译（46%）
+  + 流式下载 ma5_ds.bin.z（50~70%）+ DecompressionStream 按已知原始长度计
+  解压进度（70~95%）+ 初始化（96~100%）；进度条挂 header 下缘。
+  wasm 预取后经 wasmBinary 传入工厂（绕开 emscripten 内部无进度 fetch）。
+- 手机竖屏：传输条重排为两行（按钮行 + 进度/音量行），t-mid 时间右贴；
+  @media≤820px 触控目标 ≥42px、钢琴 96px、导航键 40px。
+  390px 视口自动检测：所有控件零重叠、零横向溢出。
+- server.mjs 保持只绑 127.0.0.1（用户指示，不改 0.0.0.0）。
