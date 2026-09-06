@@ -26,11 +26,14 @@ async function pushHistory(name, size, blob) {
 }
 
 /* ---------------- 状态 ---------------- */
+const PREROLL_FRAMES = FRAMES_PER_SEC * 2;          // 预滚：攒满 2s 才开声
 const S = {
   coreReady: false, loaded: false, playing: false, loop: false, ended: false,
+  priming: false,                          // 预滚中：只填缓冲不出声
   name: null, curBuf: null,               // 当前曲目原始 bytes（循环重播用）
   ring: new Int32Array(FRAMES_PER_SEC * RING_SECS),   // 每项一个立体声帧
   rd: 0, wr: 0, totalWr: 0,               // totalWr = 累计渲染帧数
+  playedFrames: 0,
   musicSeen: false, silentFrames: 0, noPcm: 0,
   speed: 0,
 };
@@ -85,8 +88,16 @@ function fillLoop() {
   const cap = S.ring.length;
   const t0 = performance.now();
   let audioMs = 0, wallBusyMs = 0;
+  // 欠载保护：播放中缓冲耗尽 → 回到预滚，攒满再出声（不连续小口供声）
+  const buffered = () => (S.wr - S.rd + cap) % cap;
+  if (S.playing && !S.priming && ctx && ctx.state === 'running' &&
+      buffered() === 0 && !S.ended) {
+    S.priming = true;
+    ctx.suspend();
+    $('chipState').textContent = 'buffering';
+  }
   while (true) {
-    const used = (S.wr - S.rd + cap) % cap;
+    const used = buffered();
     if (cap - used < FRAMES_PER_SEC * 3) break;    // 缓冲已够
     M._ma5w_pump_seq();
     M._ma5w_pump_audio();
@@ -110,6 +121,16 @@ function fillLoop() {
     else if (S.musicSeen && (S.silentFrames += frames) > FRAMES_PER_SEC * 2) return songEnd();
   }
   if (wallBusyMs > 5 && audioMs > 0) S.speed = audioMs / wallBusyMs;
+  // 预滚完成 → 开声（暂停中则只攒着，等恢复）
+  if (S.priming && S.playing && buffered() >= PREROLL_FRAMES) {
+    S.priming = false;
+    const t = ctx.currentTime;
+    gainNode.gain.cancelScheduledValues(t);
+    gainNode.gain.setValueAtTime(Math.max(gainNode.gain.value, 0.0001), t);
+    gainNode.gain.linearRampToValueAtTime(muted ? 0 : $('vol').value / 100, t + 0.04);
+    ctx.resume();
+    $('chipState').textContent = 'playing';
+  }
   updateUI();
 }
 
@@ -121,32 +142,63 @@ function songEnd() {
 }
 
 /* ---------------- 曲目 ---------------- */
+let switching = false;
 async function loadTrack(name, buf) {
   if (!S.coreReady) await bootCore();
-  if (!S.coreReady) return false;
-  pause();
-  S.rd = S.wr = S.totalWr = 0; S.playedFrames = 0; S.musicSeen = false; S.silentFrames = 0; S.noPcm = 0;
-  S.ended = false; S.name = name; S.curBuf = buf;
-  if (loadPtr) M._free(loadPtr);
-  loadPtr = M._malloc(buf.byteLength);
-  new Uint8Array(M.HEAPU8.buffer, M.HEAPU8.byteOffset + loadPtr, buf.byteLength).set(new Uint8Array(buf));
-  if (M._ma5w_load(loadPtr, buf.byteLength) !== 0) {
-    status('MaSound_Load 失败（文件可能不是 MA-5 曲目）', false);
-    return false;
+  if (!S.coreReady || switching) return false;
+  switching = true;
+  $('chipState').textContent = 'switch';
+  try {
+    // 短淡出（避免波形硬切爆音），等淡出播完再动核心
+    if (ctx && gainNode && S.playing) {
+      gainNode.gain.cancelScheduledValues(ctx.currentTime);
+      gainNode.gain.setValueAtTime(gainNode.gain.value, ctx.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.06);
+      await new Promise(r => setTimeout(r, 90));
+      ctx.suspend();
+    }
+    S.playing = false; S.loaded = false;   // 停泵：fillLoop 不再碰核心
+    S.rd = S.wr = S.totalWr = 0; S.playedFrames = 0;
+    S.musicSeen = false; S.silentFrames = 0; S.noPcm = 0;
+    S.ended = false; S.name = name; S.curBuf = buf;
+    if (loadPtr) M._free(loadPtr);
+    loadPtr = M._malloc(buf.byteLength);
+    new Uint8Array(M.HEAPU8.buffer, M.HEAPU8.byteOffset + loadPtr, buf.byteLength).set(new Uint8Array(buf));
+    if (M._ma5w_load(loadPtr, buf.byteLength) !== 0) {
+      status('MaSound_Load 失败（文件可能不是 MA-5 曲目）', false);
+      return false;
+    }
+    if (M._ma5w_open_standby_start() !== 0) { status('standby 启动失败', false); return false; }
+    S.loaded = true;
+    $('trackName').textContent = name.replace(/\.mmf$/i, '');
+    $('trackMeta').textContent = (buf.byteLength / 1024).toFixed(1) + ' KB · MA-5';
+    status('正在渲染…', true);
+    play();                                 // priming：缓冲满才真正出声
+    markActive();
+    return true;
+  } finally {
+    switching = false;
   }
-  if (M._ma5w_open_standby_start() !== 0) { status('standby 启动失败', false); return false; }
-  S.loaded = true;
-  $('trackName').textContent = name.replace(/\.mmf$/i, '');
-  $('trackMeta').textContent = (buf.byteLength / 1024).toFixed(1) + ' KB · MA-5';
-  status('正在渲染…', true);
-  play();
-  markActive();
-  return true;
 }
 function play() {
   if (!S.loaded) return;
   ensureAudio();
+  const buffered = () => (S.wr - S.rd + S.ring.length) % S.ring.length;
+  if (ctx.state === 'suspended' || buffered() < PREROLL_FRAMES) {
+    // 预滚：先只填缓冲不出声，攒满再开声（消除开头的断续）
+    S.priming = true;
+    S.playing = true;
+    $('btnPlay').textContent = '⏸';
+    $('chipState').textContent = 'buffering';
+    fillLoop();                              // 立刻开填，不等 120ms 定时
+    return;
+  }
   ctx.resume();
+  // 淡入（切曲时 gain 被 ramp 到 0，这里恢复）
+  const t = ctx.currentTime;
+  gainNode.gain.cancelScheduledValues(t);
+  gainNode.gain.setValueAtTime(Math.max(gainNode.gain.value, 0.0001), t);
+  gainNode.gain.linearRampToValueAtTime(muted ? 0 : $('vol').value / 100, t + 0.04);
   S.playing = true; $('btnPlay').textContent = '⏸'; $('chipState').textContent = 'playing';
 }
 function pause() {

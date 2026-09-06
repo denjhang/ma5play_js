@@ -66,3 +66,11 @@
 core: MA5PLAY_OPT=-O1 sh build.sh web && sh ../web/prepare.sh
 web:  node web/server.mjs   → http://127.0.0.1:8095
 ```
+
+### 切曲卡音修复（2026-09-06 夜，用户实测反馈）
+- 根因一（爆音）：切曲瞬间清空环形缓冲，波形硬切。修复 = 切曲前 60ms gain
+  线性淡出 → 停泵重载 → 开声时 40ms 淡入。
+- 根因二（断续，用户明令"等缓冲满再播"）：开声时缓冲为空，渲染 2.5x 追不上
+  实时消耗。修复 = **priming 预滚门控**：攒满 2s（PREROLL_FRAMES）才
+  ctx.resume() 开声；播放中缓冲耗尽也回到 priming（欠载保护），不连续小口供声。
+- 切曲期间 switching 标志停 fillLoop，杜绝在半初始化 ctx 上 pump。
