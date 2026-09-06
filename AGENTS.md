@@ -32,9 +32,13 @@
   通道 (bankL,pc) 命中 PCM 音色（注册序 ↔ ext 波 id 序），各行独立音高；
   **bankM=125/bankL=0 = Mwa 流通道**，发声即亮（Note=stream）。
   voice→wave 精确链接在 DLL 内，注册序是 parser 级近似。
-- ✅ MA-5 PCM ROM 鼓行（ymf825 关闭 MA-5 鼓是实现不完全，实际在用）：MA-3 =
-  ch9 音符枚举；MA-5 = bankM=125 通道命中 PCM 音色 drum 键的音符（GM 鼓键），
-  b125 非鼓键活动 = Mwa 流（鼓/流同通道、按音符语义区分）。
+- ✅ **解析器对齐 C++ 参考实现（1484/1484 全语料 bit 级一致）**：
+  `ref/libymf825_{ma2,ma3,ma5}/` 为三版源码副本 + `ref/voice/` 资产 +
+  C++ 基准工具（count_events/dump_events/test_vis_slots，本地 g++ 构建），
+  是可视化解码的地面真值来源。五大修复见 5ff7b41：0x8X=NOTE（带
+  g_lastVelocity）、fmt=1 解压后分发 evMobile、MMMG 内 SEQU + 头字节时基、
+  evSequ 全分支重写 + rest-- 越界、evHps 短格式表。A/B 脚本模式：C++
+  count_events.exe 全语料跑一遍存 TSV，JS 对拍 notes/cc/pc/pb + 每通道数。
 - ✅ 通道表粘滞铁律：单曲目内所有通道所有条目禁止复位——失活只撤高亮，
   Note/Event/Vol/Pan/Exp 保留最后值，切曲才整表重建。
 - ✅ 精细分阶段载入进度条：五阶段（下载核心 30%/编译 22%/下载预载 13%/
