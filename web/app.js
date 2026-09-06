@@ -53,8 +53,8 @@ function bootWorker() {
       $('loadbar').hidden = true;
       S.workerReady = true;
       $('chipMode').textContent = m.compact ? 'compact 预载' : 'flat';
-      status('核心就绪（worker）', true);
-      log(`[core] ma5t worker 就绪（${m.compact ? 'compact 预载' : 'flat'}）`);
+      status('Core ready (worker)', true);
+      log(`[core] ma5t worker ready (${m.compact ? 'compact preload' : 'flat'})`);
     } else if (m.type === 'pcm') {
       S.pcmRecv = (S.pcmRecv || 0) + 1;
       try {
@@ -77,8 +77,8 @@ function bootWorker() {
         $('chipState').textContent = 'buffering';
         syncPlayBtn();
       } else {
-        status('MaSound_Load 失败', false);
-        log(`[load] ${S.name}: ${m.err ?? 'MaSound_Load 失败'}`);
+        status('MaSound_Load failed', false);
+        log(`[load] ${S.name}: ${m.err ?? 'MaSound_Load failed'}`);
       }
       S.switching = false;
     } else if (m.type === 'log') { log('[w] ' + m.msg); }
@@ -89,9 +89,9 @@ function bootWorker() {
   worker.postMessage({ cmd: 'init' });
 }
 function showMeta() {
-  const ma = S.meta?.version ? `MA-${S.meta.version}` : '未知';
+  const ma = S.meta?.version ? `MA-${S.meta.version}` : 'unknown';
   $('trackVer').textContent = ma;
-  $('trackVer').style.color = ma === 'MA-5' ? 'var(--accent2)' : ma === '未知' ? 'var(--dim)' : 'var(--accent)';
+  $('trackVer').style.color = ma === 'MA-5' ? 'var(--accent2)' : ma === '?' ? 'var(--dim)' : 'var(--accent)';
   $('trackTitle').textContent = S.meta?.title || '—';
   $('trackLen').textContent = S.meta?.durationMs ? fmt(S.meta.durationMs / 1000) : '—';
   $('timeEnd').textContent = '/ ' + (S.meta?.durationMs ? fmt(S.meta.durationMs / 1000) : '--:--');
@@ -222,7 +222,7 @@ function songEnd() {
   S.ended = true; S.playing = false;
   $('chipState').textContent = 'end';
   syncPlayBtn();
-  log(`[play] 曲终 ${fmt(S.playedFrames / FRAMES_PER_SEC)}`);
+  log(`[play] end of track @ ${fmt(S.playedFrames / FRAMES_PER_SEC)}`);
   if (S.loop) setTimeout(() => replayCurrent(), 500);
   else shiftTrack(1, true);
 }
@@ -342,7 +342,7 @@ const browser = {
 async function navigateTo(path, pushHist = true) {
   const r = await fetch('/api/list?path=' + encodeURIComponent(path));
   const d = await r.json();
-  if (d.error) { log(`[browser] 无法打开 ${path}: ${d.error}`); return; }
+  if (d.error) { log(`[browser] cannot open ${path}: ${d.error}`); return; }
   if (browser.path && pushHist) { browser.back.push(browser.path); browser.fwd = []; }
   browser.path = d.path; browser.parent = d.parent; browser.entries = d.entries;
   if (pushHist) addFolderHistory(d.path);
@@ -359,7 +359,7 @@ function addFolderHistory(p) {
 function renderHistSelect() {
   const sel = $('folderHist');
   sel.innerHTML = '';
-  if (!browser.history.length) { sel.innerHTML = '<option value="">(无历史)</option>'; return; }
+  if (!browser.history.length) { sel.innerHTML = '<option value="">(no history)</option>'; return; }
   for (const p of browser.history) {
     const o = document.createElement('option');
     o.value = p; o.textContent = p.split(/[\\/]/).filter(Boolean).pop() || p; o.title = p;
@@ -388,7 +388,7 @@ function renderBrowser() {
 }
 async function playByPath(path) {
   const r = await fetch('/api/file?path=' + encodeURIComponent(path));
-  if (!r.ok) { log(`[load] 读取失败 ${path}`); return; }
+  if (!r.ok) { log(`[load] read failed ${path}`); return; }
   const buf = await r.arrayBuffer();
   if (await loadTrack(path.split(/[\\/]/).pop(), buf, path)) markActiveFile();
 }
@@ -480,7 +480,7 @@ function shiftTrack(dir, auto = false) {
   if (!files.length) return;
   const idx = files.findIndex(li => li.dataset.path === S.curPath);
   const next = idx < 0 ? files[0] : (dir > 0 ? files[idx + 1] : files[idx - 1]);
-  if (!next) { if (!auto) log('[nav] ' + (dir > 0 ? '已是最后一曲' : '已是第一曲')); return; }
+  if (!next) { if (!auto) log('[nav] ' + (dir > 0 ? 'end of list' : 'start of list')); return; }
   playByPath(next.dataset.path);
 }
 
@@ -501,7 +501,7 @@ $('btnPlay').onclick = () => S.playing ? pause() : play();
 $('btnStop').onclick = stop;
 $('btnPrev').onclick = () => shiftTrack(-1);
 $('btnNext').onclick = () => shiftTrack(1);
-$('btnLoop').onclick = () => { S.loop = !S.loop; $('btnLoop').classList.toggle('on', S.loop); log(`[loop] ${S.loop ? '开' : '关'}`); };
+$('btnLoop').onclick = () => { S.loop = !S.loop; $('btnLoop').classList.toggle('on', S.loop); log(`[loop] ${S.loop ? 'on' : 'off'}`); };
 $('vol').oninput = applyVolume;
 $('btnMute').onclick = () => { muted = !muted; $('btnMute').textContent = muted ? '🔇' : '🔊'; applyVolume(); };
 $('navBack').onclick = () => { if (browser.back.length) { browser.fwd.push(browser.path); navigateTo(browser.back.pop(), false); } };
@@ -515,7 +515,7 @@ window.loadTrack = loadTrack;
 window.__updateUI = () => { try { updateUI(); return 'ok'; } catch (e) { return 'ERR ' + e.message; } };
 window.__dbg = () => ({ q: S.queue.length, qFrames: S.qFrames, pcmRecv: S.pcmRecv || 0, first: S.firstPcm, spCalls: S.spCalls || 0, spFed: S.spFed || 0, loaded: S.loaded, playing: S.playing, priming: S.priming, ended: S.ended, played: S.playedFrames, ctx: ctx?.state });
 buildChGrid();
-log('[ui] ma5play 启动');
+log('[ui] ma5play started');
 bootWorker();
 navigateTo(localStorage.getItem('lastDir') || '');   // 上次打开的目录（无记录用服务器默认）
 renderHistSelect();

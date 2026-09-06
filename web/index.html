@@ -1,26 +1,28 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0b0e14">
+<meta name="description" content="ma5play — bit-exact Yamaha MA-5 SMAF (.mmf) ringtones played in your browser via t386 WASM emulation">
 <title>ma5play — MA-5 WASM Player</title>
 <link rel="icon" type="image/png" href="assets/icon.png">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <header class="top">
-  <div class="brand"><img class="logo" src="assets/icon.png" alt="ma2play icon"> ma5play
+  <div class="brand"><img class="logo" src="assets/icon.png" alt="ma5play"> ma5play
     <span class="tag">MA-5 · WASM</span></div>
-  <div class="status" id="status">加载核心…</div>
+  <div class="status" id="status">Loading core…</div>
   <div class="loadbar" id="loadbar" hidden><div class="loadfill" id="loadfill"></div></div>
 </header>
 
 <main class="layout">
-  <!-- ============ 左侧栏：Controls（同 ma2play：仅信息，不放传输控件） ============ -->
+  <!-- ============ Left sidebar: Controls (mirrors ma2play LeftPane) ============ -->
   <aside class="panel side">
     <div class="panel-title">File Info</div>
-    <div class="kv"><span class="k">File</span><span class="v" id="trackName">未加载</span></div>
+
+    <div class="kv"><span class="k">File</span><span class="v" id="trackName">Not loaded</span></div>
     <div class="kv"><span class="k">Title</span><span class="v" id="trackTitle">—</span></div>
     <div class="kv"><span class="k">Version</span><span class="v ver" id="trackVer">—</span></div>
     <div class="kv"><span class="k">Size</span><span class="v" id="trackSize">—</span></div>
@@ -33,37 +35,37 @@
       <span class="chip" id="chipState">idle</span>
     </div>
 
-    <div class="panel-title small">本机文件</div>
-    <label class="btn ghost block" for="fileinput">＋ 打开 MMF 文件</label>
+    <div class="panel-title small">Local Files</div>
+    <label class="btn ghost block" for="fileinput">＋ Open MMF File</label>
     <input type="file" id="fileinput" accept=".mmf" multiple hidden>
-    <div class="drop" id="drop">或拖放 .mmf 到这里</div>
+    <div class="drop" id="drop">or drop .mmf files here</div>
   </aside>
 
-  <!-- ============ 右侧大区 ============ -->
+  <!-- ============ Right section ============ -->
   <section class="right">
-    <!-- 顶排：钢琴键盘（同 ma2play PianoArea）+ 通道状态区 -->
+    <!-- Top row: piano + channel status -->
     <div class="toprow">
       <div class="panel pianopanel">
         <div class="panel-title">Piano</div>
         <canvas id="piano" width="900" height="110"></canvas>
       </div>
       <div class="panel statuspanel">
-        <div class="panel-title">通道状态 <span class="dim">（48ch 快照待 AudioWorklet 阶段）</span></div>
+        <div class="panel-title">Channels <span class="dim">(48ch snapshot: coming with AudioWorklet)</span></div>
         <div class="chgrid" id="chGrid"></div>
       </div>
     </div>
 
-    <!-- 底排：文件浏览器（含传输条）+ Log -->
+    <!-- Bottom row: file browser + log -->
     <div class="bottomrow">
       <div class="panel browser">
-        <!-- 传输条（ma2play SMAF Player header 同位置：浏览器面板顶部） -->
+        <!-- Transport (same position as ma2play SMAF Player header) -->
         <div class="transport">
           <div class="t-row">
-            <button class="ctl" id="btnPrev" title="上一曲">⏮</button>
-            <button class="ctl" id="btnPlay" title="播放/暂停">▶</button>
-            <button class="ctl" id="btnNext" title="下一曲">⏭</button>
-            <button class="ctl" id="btnStop" title="停止">⏹</button>
-            <button class="ctl" id="btnLoop" title="循环">↻</button>
+            <button class="ctl" id="btnPrev" title="Previous">⏮</button>
+            <button class="ctl" id="btnPlay" title="Play / Pause">▶</button>
+            <button class="ctl" id="btnNext" title="Next">⏭</button>
+            <button class="ctl" id="btnStop" title="Stop">⏹</button>
+            <button class="ctl" id="btnLoop" title="Loop">↻</button>
             <div class="t-mid">
               <span class="time" id="timeCur">0:00</span>
               <span class="time dim" id="timeEnd">/ --:--</span>
@@ -71,20 +73,20 @@
           </div>
           <div class="t-row t-mid-row">
             <div class="progress"><div class="bar" id="bar"></div></div>
-            <button class="ctl small" id="btnMute" title="静音">🔊</button>
-            <input type="range" id="vol" min="0" max="100" value="80" title="音量">
+            <button class="ctl small" id="btnMute" title="Mute">🔊</button>
+            <input type="range" id="vol" min="0" max="100" value="80" title="Volume">
           </div>
         </div>
-        <!-- 导航 -->
+        <!-- Navigation -->
         <div class="navrow">
-          <button class="nav" id="navBack" title="后退">‹</button>
-          <button class="nav" id="navFwd" title="前进">›</button>
-          <button class="nav" id="navUp" title="上一级">⌃</button>
+          <button class="nav" id="navBack" title="Back">‹</button>
+          <button class="nav" id="navFwd" title="Forward">›</button>
+          <button class="nav" id="navUp" title="Up to parent folder">⌃</button>
           <div class="crumbs" id="crumbs"></div>
         </div>
         <div class="histrow">
-          <span class="dim">历史</span>
-          <select id="folderHist"><option value="">(无历史)</option></select>
+          <span class="dim">History</span>
+          <select id="folderHist"><option value="">(no history)</option></select>
         </div>
         <ul class="list browserlist" id="fileList"></ul>
       </div>

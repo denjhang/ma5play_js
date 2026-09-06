@@ -56,19 +56,19 @@ onmessage = async e => {
   if (msg.cmd === 'init') {
     try {
       const prog = (pct, label) => postMessage({ type: 'progress', pct: Math.round(pct), label });
-      prog(2, '下载核心');
-      const wasmBin = await fetchProgress('assets/ma5play.wasm', p => prog(2 + p * 0.43, '下载核心'));   // 2~45%
-      prog(46, '编译核心');
+      prog(2, 'download core');
+      const wasmBin = await fetchProgress('assets/ma5play.wasm', p => prog(2 + p * 0.43, 'download core'));   // 2~45%
+      prog(46, 'compile');
       M = await ma5play({ wasmBinary: wasmBin.buffer, locateFile: p => 'assets/' + p });
-      prog(50, '下载预载映像');
+      prog(50, 'download preload image');
       const img = await loadPreload((p, l) => prog(p, l));
-      prog(96, '初始化引擎');
+      prog(96, 'init engine');
       const ip = M._malloc(img.byteLength);
       new Uint8Array(M.HEAPU8.buffer, M.HEAPU8.byteOffset + ip, img.byteLength).set(img);
       M._ma5w_set_preload(ip, img.byteLength);
       if (M._ma5w_init(0) !== 0) { postMessage({ type: 'error', msg: 'init: ' + M._ma5w_last_error() }); return; }
       pcmPtr = M._malloc(4 * CHUNK_FRAMES);
-      prog(100, '就绪');
+      prog(100, 'ready');
       postMessage({ type: 'ready', compact: !!M._ma5w_compact_mode() });
       setInterval(pump, 50);
     } catch (e) { postMessage({ type: 'error', msg: 'init: ' + e.message }); }
