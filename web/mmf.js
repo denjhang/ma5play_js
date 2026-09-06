@@ -119,8 +119,14 @@ function evHps(u8, p, rest, octShift) {
     if (rest < 1) return [null, p, rest];
     let v = u8[p]; p++; rest--;
     switch (sig & 15) {
+      case 0: return [{ type: 'pc', ch, pc: v }, p, rest];
       case 2: if (v >= 0x80) v = 0x80 - v; return [{ type: 'oct', ch, v }, p, rest];
-      default: return [{ type: 'nop' }, p, rest];   // PC/Bank/Bend/Vol/Pan/Exp（可视化不需要）
+      case 4: return [{ type: 'bend', ch }, p, rest];
+      case 7: return [{ type: 'cc', ch, cc: 7, v }, p, rest];
+      case 10: return [{ type: 'cc', ch, cc: 10, v }, p, rest];
+      case 11: return [{ type: 'cc', ch, cc: 11, v }, p, rest];
+      case 1: return [{ type: 'cc', ch, cc: 0, v }, p, rest];     // bank
+      default: return [{ type: 'nop' }, p, rest];
     }
   }
   return [{ type: 'nop' }, p, rest];
@@ -143,9 +149,16 @@ function evMobile(u8, p, rest, fmt32) {
     let gate; [gate, p, rest] = varint(u8, p, rest, true);
     return [{ type: 'nop' }, p, rest];
   }
-  if (status === 0xB0) { p += 2; rest -= 2; return [{ type: 'nop' }, p, rest]; }
-  if (status === 0xC0) { p += 1; rest -= 1; return [{ type: 'nop' }, p, rest]; }
-  if (status === 0xE0) { p += 2; rest -= 2; return [{ type: 'nop' }, p, rest]; }
+  if (status === 0xB0) {
+    if (rest < 2) return [null, p, rest];
+    const cc = u8[p]; const v = u8[p + 1]; p += 2; rest -= 2;
+    return [{ type: 'cc', ch, cc, v }, p, rest];
+  }
+  if (status === 0xC0) {
+    if (rest < 1) return [null, p, rest];
+    return [{ type: 'pc', ch, pc: u8[p++] }, p, --rest];
+  }
+  if (status === 0xE0) { p += 2; rest -= 2; return [{ type: 'bend', ch }, p, rest]; }
   if (st === 0xF0) { const [d, np, nr] = readExclusive(u8, p, rest); return [d ? { type: 'excl', data: d } : null, np, nr]; }
   if (st === 0xFF) { if (rest >= 1 && u8[p] === 0x00) { p++; rest--; } return [{ type: 'nop' }, p, rest]; }
   return [null, p, rest];
@@ -208,7 +221,11 @@ function parseSequence(u8, off, size, fmt, chBase, out) {
     else if (ev.type === 'note') {
       const note = Math.max(0, Math.min(127, ev.note + octShift[ev.ch] * 12));
       out.notes.push({ t, end: t + ev.gate * gateTb, note, vel: ev.vel, ch: ev.ch + chBase });
+      out.chEv.push({ t, ch: ev.ch + chBase, k: 'Note', note, vel: ev.vel });
     } else if (ev.type === 'excl') out.excls.push(ev.data);
+    else if (ev.type === 'cc') out.chEv.push({ t, ch: ev.ch + chBase, k: 'CC', cc: ev.cc, v: ev.v });
+    else if (ev.type === 'pc') out.chEv.push({ t, ch: ev.ch + chBase, k: 'PC', pc: ev.pc });
+    else if (ev.type === 'bend') out.chEv.push({ t, ch: ev.ch + chBase, k: 'Bend' });
   }
   out.durMs = Math.max(out.durMs, t);
 }
@@ -304,7 +321,7 @@ export function parseMMF(buf) {
   let p = 8;
   const end = u8.length - 2;                    // 尾部 CRC
   let trackIdx = 0;
-  const out1 = { ...out, notes: [], excls: [], tracks: [], durTb: 2, gateTb: 2, durMs: 0 };
+  const out1 = { ...out, notes: [], excls: [], tracks: [], chEv: [], durTb: 2, gateTb: 2, durMs: 0 };
   while (p + 8 <= end) {
     const sig = u32(u8, p), csz = u32(u8, p + 4);
     p += 8;

@@ -160,9 +160,8 @@ function tick() {
     songEnd();
   }
   updateUI();
+  updateChTable(Math.max(0, (S.playedFrames / FRAMES_PER_SEC) - (ctx?.outputLatency || ctx?.baseLatency || 0)));
 }
-
-/* ---------------- 曲目 ---------------- */
 async function loadTrack(name, buf, path) {
   if (!S.workerReady || S.switching) return false;
   S.switching = true;
@@ -185,6 +184,7 @@ async function loadTrack(name, buf, path) {
     S.queue = []; S.qFrames = 0; S.blkOff = 0;  // 此后不会再有旧代 PCM 进队
     S.meta = parseMMF(buf);
     piano.onTrack(S.meta);
+    chOnTrack(S.meta);
     ensureAudio();
     S.loadId = (S.loadId || 0) + 1;
     worker.postMessage({ cmd: 'load', id: S.loadId, buf }, [buf]);
@@ -213,7 +213,7 @@ function pause() {
   syncPlayBtn();
 }
 function stop() {
-  pause(); S.playedFrames = 0; piano.onTrack(S.meta);
+  pause(); S.playedFrames = 0; piano.onTrack(S.meta); chOnTrack(S.meta);
   $('chipState').textContent = 'stop'; updateUI();
 }
 function syncPlayBtn() { $('btnPlay').textContent = S.playing ? '⏸' : '▶'; }
@@ -353,13 +353,57 @@ function updateUI() {
   $('bar').style.width = Math.min(100, (heard / total) * 100) + '%';
   $('chipSpeed').textContent = S.speed ? S.speed.toFixed(2) + 'x rt' : '—';
 }
+/* ---------------- 通道表（ma2play 通道可视化同款：Ch/Prog/Note/Vol/Pan/Exp/Event） ---------------- */
+const GM_NAMES = ['AcGrandPiano','BrightPiano','ElectricGrand','HonkyTonk','ElectricPiano1','ElectricPiano2','Harpsichord','Clavinet','Celesta','Glockenspiel','MusicBox','Vibraphone','Marimba','Xylophone','TubularBells','Dulcimer','DrawbarOrgan','PercOrgan','RockOrgan','ChurchOrgan','ReedOrgan','Accordion','Harmonica','TangoAccord','AcGuitarNylon','AcGuitarSteel','JazzGuitar','CleanGuitar','MutedGuitar','OverdriveGuitar','DistortionGuitar','GuitarHarmonics','AcBass','FingerBass','PickBass','FretlessBass','SlapBass1','SlapBass2','SynthBass1','SynthBass2','Violin','Viola','Cello','Contrabass','TremoloStrings','Pizzicato','OrchestralHarp','Timpani','StringEns1','StringEns2','SynthStrings1','SynthStrings2','ChoirAahs','VoiceOohs','SynthVox','OrchestraHit','Trumpet','Trombone','Tuba','MutedTrumpet','FrenchHorn','BrassSection','SynthBrass1','SynthBrass2','SopranoSax','AltoSax','TenorSax','BaritoneSax','Oboe','EnglishHorn','Bassoon','Clarinet','Piccolo','Flute','Recorder','PanFlute','BlownBottle','Shakuhachi','Whistle','Ocarina','SquareLead','SawLead','CalliopeLead','ChiffLead','CharangLead','VoiceLead','FifthLead','BassLead','NewAgePad','WarmPad','PolySynthPad','ChoirPad','BowedPad','MetallicPad','HaloPad','SweepPad','Rain','Soundtrack','Crystal','Atmosphere','Brightness','Goblins','Echoes','SciFi','Sitar','Banjo','Shamisen','Koto','Kalimba','Bagpipe','Fiddle','Shanai','TinkleBell','Agogo','SteelDrums','Woodblock','TaikoDrum','MelodicTom','SynthDrum','ReverseCymbal','GuitarFretNoise','BreathNoise','Seashore','BirdTweet','Telephone','Helicopter','Applause','Gunshot'];
+const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const noteName = n => n >= 0 && n <= 127 ? NOTE_NAMES[n % 12] + ((n / 12 | 0) - 1) : '--';
+const chVis = { chans: [] };
+
 function buildChGrid() {
-  const g = $('chGrid'); g.innerHTML = '';
-  for (let i = 0; i < 48; i++) {
-    const d = document.createElement('div');
-    d.className = `chcell ${i < 16 ? 'fm' : 'pcm'}`;
-    d.textContent = i < 16 ? `F${i}` : `P${i - 16}`;
-    g.appendChild(d);
+  const tb = $('chTable');
+  tb.innerHTML = `<thead><tr><th>Ch</th><th>Prog</th><th>Note</th><th>Vol</th><th>Pan</th><th>Exp</th><th>Event</th></tr></thead>`;
+  const body = document.createElement('tbody');
+  for (let i = 0; i < 16; i++) {
+    const tr = document.createElement('tr');
+    tr.id = 'chrow' + i;
+    tr.innerHTML = `<td>Ch${i}</td><td class="prog">—</td><td class="note">--</td><td class="vol">--</td><td class="pan">--</td><td class="exp">--</td><td class="evt">--</td>`;
+    body.appendChild(tr);
+  }
+  tb.appendChild(body);
+  chVis.chans = Array.from({ length: 16 }, () => ({ ev: [], ei: 0, notes: [], ni: 0, pc: -1, vol: 100, pan: 64, exp: 127, last: '--', note: -1, act: false }));
+}
+function chOnTrack(meta) {
+  for (const c of chVis.chans) { c.ev = []; c.notes = []; c.ei = 0; c.ni = 0; c.pc = -1; c.vol = 100; c.pan = 64; c.exp = 127; c.last = '--'; c.note = -1; c.act = false; }
+  for (const e of meta?.chEv ?? []) chVis.chans[e.ch]?.ev.push(e);
+  for (const n of meta?.notes ?? []) chVis.chans[n.ch]?.notes.push(n);
+  for (const c of chVis.chans) { c.ev.sort((a, b) => a.t - b.t); c.notes.sort((a, b) => a.t - b.t); }
+}
+function updateChTable(tSec) {
+  for (let i = 0; i < 16; i++) {
+    const c = chVis.chans[i];
+    while (c.ei < c.ev.length && c.ev[c.ei].t <= tSec) {
+      const e = c.ev[c.ei++];
+      if (e.k === 'PC') c.pc = e.pc;
+      else if (e.k === 'CC') { if (e.cc === 7) c.vol = e.v; else if (e.cc === 10) c.pan = e.v; else if (e.cc === 11) c.exp = e.v; else if (e.cc === 0) c.last = 'Bank'; }
+      if (e.k !== 'Note') c.last = e.k;
+    }
+    // 当前音符：最近的 note-on 且未结束
+    let note = -1;
+    for (let j = c.ni; j < c.notes.length; j++) {
+      const n = c.notes[j];
+      if (n.t > tSec) break;
+      if (n.end > tSec) note = n.note;
+    }
+    c.act = note >= 0;
+    const tr = $('chrow' + i);
+    const tds = tr.children;
+    tr.classList.toggle('on', c.act || c.pc >= 0);
+    tds[1].textContent = i === 9 ? 'Drums' : c.pc >= 0 ? `${c.pc} ${GM_NAMES[c.pc] ?? '?'}` : '—';
+    tds[2].textContent = note >= 0 ? noteName(note) : '--';
+    tds[3].textContent = c.vol;
+    tds[4].textContent = c.pan === 64 ? 'C' : (c.pan > 64 ? 'R' + (c.pan - 64) : 'L' + (64 - c.pan));
+    tds[5].textContent = c.exp;
+    tds[6].textContent = c.act ? 'Note' : c.last;
   }
 }
 

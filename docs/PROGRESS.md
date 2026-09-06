@@ -223,3 +223,10 @@ smaf_window.cpp Render() 确认真实布局并复刻：
   汇合点 = 音频消费时钟 playedFrames；t = playedFrames/48000 −
   ctx.outputLatency（输出延迟自动补偿，无需手动 PianoSyncDelay）。
   音符按下满亮（vel→lv，0.15~1），释放后 0.12s 线性渐隐。
+
+### 通道状态表（ma2play 可视化同款，parser 数据源）
+- mmf.js 补全 CC/PC/Bend 事件捕获（此前丢弃）→ chEv 时间轴。
+- chTable：16 通道 × Ch/Prog(GM 128 音色名)/Note(如 C4)/Vol/Pan(L/R 偏移)/
+  Exp/Event 列，sticky 表头，活跃行高亮；与钢琴同一音频时钟
+  （playedFrames − outputLatency）驱动，tick 100ms 更新。
+- 替换原 48 格占位（48ch 快照仍留 AudioWorklet 阶段，届时换后端数据源）。
