@@ -259,3 +259,13 @@ smaf_window.cpp Render() 确认真实布局并复刻：
 - 2 秒延迟根因：outputLatency 在蓝牙/部分 webview 报 1~2s，全额扣减把
   画面拖后。封顶 150ms。
 - 实测：LG Sound_1 waves=4 Inline、Melody05 waves=2（#1/#93 电吉他流）。
+
+### 通道表细化 + 真实发声时刻对齐（用户三连指正）
+- 波形类型按 MA-2 规范细分标注（ma2play GetWaveStates 语义）：
+  Mwa chunk → Awa (stream)/Mwa stream/MSTR；SysEx 内嵌 →
+  "ext PCM (43 79 07 7F 03)" / "wave data (43 05 00)"。
+- GM 音色名换 ma2play kGmMelodic 同款**全名**（不缩写）。
+- 延迟对齐弃用 outputLatency 扣减（蓝牙/webview 会报 1~2s，封顶也是猜），
+  改用 **ctx.getOutputTimestamp().contextTime**——浏览器报告的"此刻正在
+  发声"的真实音频时刻，直接作为可视化时钟基准（解析器对齐于此）。
+- 通道表布局稳定：table-layout fixed + colgroup 固定列宽，Prog 列省略号。

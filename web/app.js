@@ -136,15 +136,14 @@ function ensureAudio() {
   setInterval(tick, 100);                       // 定时器而非 rAF：后台/隐藏面板也要推进状态机
 }
 function applyVolume() { if (gainNode) gainNode.gain.value = muted ? 0 : $('vol').value / 100; }
-/* 可视化时钟（ma2play 同步法）：音频回调锚点 + ctx.currentTime 帧间插值，
- * 减输出延迟对齐"正在听到"的时刻。suspend 时 currentTime 冻结 → 画面自然停住。 */
+/* 可视化时钟：以 getOutputTimestamp() 的 contextTime 为基准——那是浏览器
+ * 报告的"此刻正在发声"的真实音频时刻，无需猜测/扣减任何延迟值。
+ * 锚点（clkSong/clkAt）由音频回调校准，映射到发声时刻即完成解析器对齐。 */
 function visClock() {
   if (!ctx || S.clkAt === undefined) return Math.max(0, (S.playedFrames || 0) / FRAMES_PER_SEC);
-  const t = S.clkSong + Math.max(0, ctx.currentTime - S.clkAt);
-  // 延迟补偿封顶 150ms：蓝牙/部分 webview 会报 1~2s 的 outputLatency，
-  // 全额减掉会让画面落后声音数秒（实测症状"延迟2秒"）。
-  const lat = Math.min(ctx.outputLatency || ctx.baseLatency || 0, 0.15);
-  return Math.max(0, t - lat);
+  let heardCtx = ctx.currentTime;                      // 回退：调度时刻
+  try { const ts = ctx.getOutputTimestamp?.(); if (ts && ts.contextTime > 0) heardCtx = ts.contextTime; } catch { }
+  return Math.max(0, S.clkSong + (heardCtx - S.clkAt));
 }
 function fadeIn() {
   const t = ctx.currentTime;
@@ -389,7 +388,7 @@ function updateUI() {
   $('chipSpeed').textContent = S.speed ? S.speed.toFixed(2) + 'x rt' : '—';
 }
 /* ---------------- 通道表（ma2play 通道可视化同款：Ch/Prog/Note/Vol/Pan/Exp/Event） ---------------- */
-const GM_NAMES = ['AcGrandPiano','BrightPiano','ElectricGrand','HonkyTonk','ElectricPiano1','ElectricPiano2','Harpsichord','Clavinet','Celesta','Glockenspiel','MusicBox','Vibraphone','Marimba','Xylophone','TubularBells','Dulcimer','DrawbarOrgan','PercOrgan','RockOrgan','ChurchOrgan','ReedOrgan','Accordion','Harmonica','TangoAccord','AcGuitarNylon','AcGuitarSteel','JazzGuitar','CleanGuitar','MutedGuitar','OverdriveGuitar','DistortionGuitar','GuitarHarmonics','AcBass','FingerBass','PickBass','FretlessBass','SlapBass1','SlapBass2','SynthBass1','SynthBass2','Violin','Viola','Cello','Contrabass','TremoloStrings','Pizzicato','OrchestralHarp','Timpani','StringEns1','StringEns2','SynthStrings1','SynthStrings2','ChoirAahs','VoiceOohs','SynthVox','OrchestraHit','Trumpet','Trombone','Tuba','MutedTrumpet','FrenchHorn','BrassSection','SynthBrass1','SynthBrass2','SopranoSax','AltoSax','TenorSax','BaritoneSax','Oboe','EnglishHorn','Bassoon','Clarinet','Piccolo','Flute','Recorder','PanFlute','BlownBottle','Shakuhachi','Whistle','Ocarina','SquareLead','SawLead','CalliopeLead','ChiffLead','CharangLead','VoiceLead','FifthLead','BassLead','NewAgePad','WarmPad','PolySynthPad','ChoirPad','BowedPad','MetallicPad','HaloPad','SweepPad','Rain','Soundtrack','Crystal','Atmosphere','Brightness','Goblins','Echoes','SciFi','Sitar','Banjo','Shamisen','Koto','Kalimba','Bagpipe','Fiddle','Shanai','TinkleBell','Agogo','SteelDrums','Woodblock','TaikoDrum','MelodicTom','SynthDrum','ReverseCymbal','GuitarFretNoise','BreathNoise','Seashore','BirdTweet','Telephone','Helicopter','Applause','Gunshot'];
+const GM_NAMES = ['Acoustic Grand Piano','Bright Acoustic Piano','Electric Grand Piano','Honky-tonk Piano','Electric Piano 1','Electric Piano 2','Harpsichord','Clavinet','Celesta','Glockenspiel','Music Box','Vibraphone','Marimba','Xylophone','Tubular Bells','Dulcimer','Drawbar Organ','Percussive Organ','Rock Organ','Church Organ','Reed Organ','Accordion','Harmonica','Tango Accordion','Acoustic Guitar (nylon)','Acoustic Guitar (steel)','Electric Guitar (jazz)','Electric Guitar (clean)','Electric Guitar (muted)','Overdriven Guitar','Distortion Guitar','Guitar Harmonics','Acoustic Bass','Electric Bass (finger)','Electric Bass (pick)','Fretless Bass','Slap Bass 1','Slap Bass 2','Synth Bass 1','Synth Bass 2','Violin','Viola','Cello','Contrabass','Tremolo Strings','Pizzicato Strings','Orchestral Harp','Timpani','String Ensemble 1','String Ensemble 2','SynthStrings 1','SynthStrings 2','Choir Aahs','Voice Oohs','Synth Voice','Orchestra Hit','Trumpet','Trombone','Tuba','Muted Trumpet','French Horn','Brass Section','Synth Brass 1','Synth Brass 2','Soprano Sax','Alto Sax','Tenor Sax','Baritone Sax','Oboe','English Horn','Bassoon','Clarinet','Piccolo','Flute','Recorder','Pan Flute','Blown Bottle','Shakuhachi','Whistle','Ocarina','Lead 1 (square)','Lead 2 (sawtooth)','Lead 3 (calliope)','Lead 4 (chiff)','Lead 5 (charang)','Lead 6 (voice)','Lead 7 (fifths)','Lead 8 (bass + lead)','Pad 1 (new age)','Pad 2 (warm)','Pad 3 (polysynth)','Pad 4 (choir)','Pad 5 (bowed)','Pad 6 (metallic)','Pad 7 (halo)','Pad 8 (sweep)','FX 1 (rain)','FX 2 (soundtrack)','FX 3 (crystal)','FX 4 (atmosphere)','FX 5 (brightness)','FX 6 (goblins)','FX 7 (echoes)','FX 8 (sci-fi)','Sitar','Banjo','Shamisen','Koto','Kalimba','Bagpipe','Fiddle','Shanai','Tinkle Bell','Agogo','Steel Drums','Woodblock','Taiko Drum','Melodic Tom','Synth Drum','Reverse Cymbal','Guitar Fret Noise','Breath Noise','Seashore','Bird Tweet','Telephone Ring','Helicopter','Applause','Gunshot'];
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const GM_DRUMS = { 35:'Acoustic Bass Drum',36:'Bass Drum 1',37:'Side Stick',38:'Acoustic Snare',39:'Hand Clap',40:'Electric Snare',41:'Low Floor Tom',42:'Closed Hi-Hat',43:'High Floor Tom',44:'Pedal Hi-Hat',45:'Low Tom',46:'Open Hi-Hat',47:'Low-Mid Tom',48:'Hi-Mid Tom',49:'Crash Cymbal 1',50:'High Tom',51:'Ride Cymbal 1',52:'Chinese Cymbal',53:'Ride Bell',54:'Tambourine',55:'Splash Cymbal',56:'Cowbell',57:'Crash Cymbal 2',58:'Vibraslap',59:'Ride Cymbal 2',60:'Hi Bongo',61:'Low Bongo',62:'Mute Hi Conga',63:'Open Hi Conga',64:'Low Conga',65:'High Timbale',66:'Low Timbale',67:'High Agogo',68:'Low Agogo',69:'Cabasa',70:'Maracas',71:'Short Whistle',72:'Long Whistle',73:'Short Guiro',74:'Long Guiro',75:'Claves',76:'Hi Wood Block',77:'Low Wood Block',78:'Mute Cuica',79:'Open Cuica',80:'Mute Triangle',81:'Open Triangle' };
 const noteName = n => n >= 0 && n <= 127 ? NOTE_NAMES[n % 12] + ((n / 12 | 0) - 1) : '--';
@@ -397,7 +396,7 @@ const chVis = { chans: [] };
 
 function buildChGrid() {
   const tb = $('chTable');
-  tb.innerHTML = `<thead><tr><th>Ch</th><th>Prog</th><th>Note</th><th>Vol</th><th>Pan</th><th>Exp</th><th>Event</th></tr></thead>`;
+  tb.innerHTML = `<colgroup><col style="width:9%"><col style="width:34%"><col style="width:17%"><col style="width:8%"><col style="width:9%"><col style="width:8%"><col style="width:15%"></colgroup><thead><tr><th>Ch</th><th>Prog</th><th>Note</th><th>Vol</th><th>Pan</th><th>Exp</th><th>Event</th></tr></thead>`;
   const body = document.createElement('tbody');
   for (let i = 0; i < 16; i++) {
     const tr = document.createElement('tr');
@@ -421,7 +420,10 @@ function buildWaveRows(waves) {
   waves.slice(0, 12).forEach((w, i) => {
     const tr = document.createElement('tr');
     const idTxt = w.id !== undefined ? `#${w.id}` : `M${i}`;
-    tr.innerHTML = `<td>W${i}</td><td class="prog">${w.src}${w.type ? ' t' + w.type : ''}</td><td class="note">${idTxt}</td><td>${w.hz ? w.hz + 'Hz' : '--'}</td><td>${w.stereo ? 'st' : 'mo'}</td><td>--</td><td class="evt">${(w.size / 1024).toFixed(1)}K</td>`;
+    const typeTxt = w.src === 'Mwa'
+      ? (w.type === 1 ? 'Awa (stream)' : w.type === 2 ? 'Mwa stream' : w.type === 3 ? 'MSTR' : `Mwa t${w.type}`)
+      : w.form === '7F03' ? 'ext PCM (43 79 07 7F 03)' : 'wave data (43 05 00)';
+    tr.innerHTML = `<td>W${i}</td><td class="prog">${typeTxt}</td><td class="note">${idTxt}</td><td>${w.hz ? w.hz + 'Hz' : '--'}</td><td>${w.stereo ? 'st' : 'mo'}</td><td>--</td><td class="evt">${(w.size / 1024).toFixed(1)}K</td>`;
     sec.appendChild(tr);
   });
   if (waves.length > 12) {

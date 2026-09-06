@@ -283,9 +283,9 @@ function parseTrack(u8, off, size, chBase, out) {
 function scanWaveSysEx(excls, waves) {
   for (const d of excls) {
     if (d.length >= 6 && d[0] === 0x43 && d[1] === 0x79 && d[2] === 0x07 && d[3] === 0x7F && d[4] === 0x03)
-      waves.push({ src: 'Inline', type: 4, id: d[5], stereo: false, hz: 0, size: d.length - 6 });
+      waves.push({ src: 'Inline', form: '7F03', type: 4, id: d[5], stereo: false, hz: 0, size: d.length - 6 });
     else if (d.length >= 4 && d[0] === 0x43 && d[1] === 0x05 && d[2] === 0x00)
-      waves.push({ src: 'Inline', type: 4, id: d[3], stereo: false, hz: 0, size: d.length - 4 });
+      waves.push({ src: 'Inline', form: '0500', type: 4, id: d[3], stereo: false, hz: 0, size: d.length - 4 });
   }
 }
 

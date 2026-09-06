@@ -79,7 +79,11 @@ body {
 .chpanel + .logpanel { border-top: none; border-top-left-radius: 0; border-top-right-radius: 0; }
 .logpanel { flex: 1; display: flex; flex-direction: column; min-height: 120px; }
 .chtable-wrap { max-height: min(240px, 28vh); overflow-y: auto; flex-shrink: 0; }
-.chtable { width: 100%; border-collapse: collapse; font: 11px/1.4 Consolas, monospace; }
+.chtable { width: 100%; border-collapse: collapse; font: 11px/1.4 Consolas, monospace; table-layout: fixed; }
+.chtable col.c-prog { width: 34%; }
+.chtable td.prog { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chtable td.note { width: 16%; }
+.chtable th:nth-child(2) { width: 34%; }
 .chtable th {
   position: sticky; top: 0; background: var(--panel); z-index: 1;
   color: var(--dim); font-weight: 600; text-align: left; padding: 3px 6px;
