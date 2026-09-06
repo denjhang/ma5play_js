@@ -181,4 +181,5 @@ body {
   .nav { min-width: 40px; height: 40px; }
   .crumbs { font-size: 11px; }
   .list li { font-size: 14px; min-height: 42px; }
+  .foot { display: none; }   /* 手机端隐藏页脚说明，节省纵向空间 */
 }
