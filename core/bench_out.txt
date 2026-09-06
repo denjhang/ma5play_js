@@ -1,0 +1,56 @@
+[init] ctx ok, alloc flat memory...
+[preload] mem img: 1210 blocks, 19360 KB, hwbase=0x029b0000, flat never allocated
+[init] t386 cpu up
+[init] Smw5 file (1998848 bytes)
+[init] snapshot Hw base = 0x029b0000
+[init] Hw file (1097728 bytes)
+[init] Smw5 @0x10000000 (269 imports), Hw @0x029b0000 (235 imports)
+[init] snapshot overlay: 0 regions
+[init] IAT re-patched: 504 slots
+[init] ctx ok, alloc flat memory...
+[preload] mem img: 1210 blocks, 19360 KB, hwbase=0x029b0000, flat never allocated
+[init] t386 cpu up
+[init] snapshot Hw base = 0x029b0000
+[init] Smw5 @0x10000000 (269 imports), Hw @0x029b0000 (235 imports)
+[init] snapshot overlay: 0 regions
+[init] IAT re-patched: 504 slots
+[load] MA-2 track: SUBS bits 8-11 off
+[load] MaSound_Load -> 1
+[oss] Seek -> 0
+[oss] Start -> 0
+[seq] pump start entry=0x100a65e0 arg=0x1023bdc8
+[aud] pump start dev=0x1e3d78 buf=0x3554bd0 ring=0x60001560 mode=2 a739=00 a73c=0 a740=1008c1b0 fb290=103b1410 fb28c=103b1408
+[vfnraw] 29b7834
+[vfnraw] 29b7834
+[vfnraw] 29b7834
+[vfnraw] 29b7834
+[vfnraw] 29b7834
+[seq] thread returned (restart next pump)
+[seq] pump start entry=0x100a65e0 arg=0x1023bdc8
+Dot Beat.mmf             23.3s audio 19.6s wall 1.19x rt
+[init] ctx ok, alloc flat memory...
+[preload] mem img: 1210 blocks, 19360 KB, hwbase=0x029b0000, flat never allocated
+[init] t386 cpu up
+[init] snapshot Hw base = 0x029b0000
+[init] Smw5 @0x10000000 (269 imports), Hw @0x029b0000 (235 imports)
+[init] snapshot overlay: 0 regions
+[init] IAT re-patched: 504 slots
+[load] MaSound_Load -> 1
+[oss] Seek -> 0
+[oss] Start -> 0
+[seq] pump start entry=0x100a65e0 arg=0x1023bdc8
+[aud] pump start dev=0x1e3d78 buf=0x3554bd0 ring=0x600028e0 mode=3 a739=00 a73c=100862c0 a740=1008c2d0 fb290=103b1410 fb28c=103b1408
+Melody A.mmf             30.0s audio 154.4s wall 0.19x rt
+Sound 1.mmf              SKIP(no file)
+[init] ctx ok, alloc flat memory...
+[preload] mem img: 1210 blocks, 19360 KB, hwbase=0x029b0000, flat never allocated
+[init] t386 cpu up
+[init] snapshot Hw base = 0x029b0000
+[init] Smw5 @0x10000000 (269 imports), Hw @0x029b0000 (235 imports)
+[init] snapshot overlay: 0 regions
+[init] IAT re-patched: 504 slots
+[load] MaSound_Load -> 1
+[oss] Seek -> 0
+[oss] Start -> 0
+[seq] pump start entry=0x100a65e0 arg=0x1023bdc8
+[aud] pump start dev=0x1e3d78 buf=0x3554bd0 ring=0x60037140 mode=5 a739=00 a73c=0 a740=1008c3c0 fb290=103b1410 fb28c=103b1408

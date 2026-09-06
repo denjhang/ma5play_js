@@ -240,7 +240,15 @@ function parseTrack(u8, off, size, chBase, out) {
   out.gateTb = TIMEBASE[u8[off + 3]] ?? 2;
   let p = off + 4;
   const end = off + size;
-  p += fmt === 0 ? 2 : (fmt === 3 ? 32 : 16);   // 通道状态区
+  const stBytes = fmt === 0 ? 2 : (fmt === 3 ? 32 : 16);
+  // 通道类型（NoCare/Melody/NoMel/Rhythm）——HPS 2 字节打包 / 其余每通道 1 字节
+  if (fmt === 0) {
+    const b = (u8[off + 4] << 8) | u8[off + 5];
+    for (let c = 0; c < 4; c++) out.chTypes[chBase + c] = (b >> (12 - c * 4)) & 3;
+  } else {
+    for (let c = 0; c < stBytes && c < 32; c++) out.chTypes[chBase + c] = u8[off + 4 + c] & 3;
+  }
+  p += stBytes;
   while (p + 8 <= end) {
     const sig = u32(u8, p), csz = u32(u8, p + 4);
     p += 8;
@@ -358,12 +366,13 @@ export function parseMMF(buf) {
   let p = 8;
   const end = u8.length - 2;                    // 尾部 CRC
   let trackIdx = 0;
-  const out1 = { ...out, notes: [], excls: [], tracks: [], chEv: [], waves: [], voices: [], durTb: 2, gateTb: 2, durMs: 0 };
+  const out1 = { ...out, notes: [], excls: [], tracks: [], chEv: [], waves: [], voices: [], chTypes: new Array(32).fill(-1), atrCount: 0, durTb: 2, gateTb: 2, durMs: 0 };
   while (p + 8 <= end) {
     const sig = u32(u8, p), csz = u32(u8, p + 4);
     p += 8;
     if (p + csz > end) break;
     if (sig === SIG.CNTI) parseCntiTitle(u8, p, csz, out1);
+    else if ((sig & 0xFFFFFF00) === 0x41545200) out1.atrCount++;   // "ATR*" ADPCM 音轨
     else if ((sig & 0xFFFFFF00) === SIG.MTR) {
       const fmt = u8[p];
       const chBase = (fmt === 0) ? trackIdx * 4 : 0;   // HPS 多轨：全局通道 = c + t*4
@@ -395,6 +404,15 @@ export function parseMMF(buf) {
     p += csz;
   }
   scanExclusives(out1.excls, out1);
+  // 注册表去重（DefleMask 逐音符 SysEx 会产生上万条同键注册）
+  { const seen = new Set(); out1.voices = out1.voices.filter(v => {
+      const k = v.kind + '|' + (v.bankM ?? '') + '|' + (v.bankL ?? '') + '|' + (v.pc ?? '') + '|' + (v.vtype ?? '');
+      if (seen.has(k)) return false; seen.add(k); return true;
+    }); }
+  { const seen = new Set(); out1.waves = out1.waves.filter(w => {
+      const k = (w.kind ?? w.src) + '|' + (w.id ?? '') + (w.size ?? '');
+      if (seen.has(k)) return false; seen.add(k); return true;
+    }); }
   out1.version = versionFromCnti(out1.cntiStream ?? new Uint8Array(0)) || versionFromExcls(out1.excls);
   out1.maName = { 1: 'MA-1', 2: 'MA-2', 3: 'MA-3', 5: 'MA-5', 7: 'MA-7' }[out1.version] ?? 'Unknown';
   // 曲长 = 最后事件时间与最长音符结束的较大者

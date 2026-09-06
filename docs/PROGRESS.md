@@ -346,3 +346,16 @@ smaf_window.cpp Render() 确认真实布局并复刻：
 - 载入即出解析摘要日志 + 首键点亮时间戳 → 静态↔运行对比闭环
   （Sound_1: 解析首音符 2.0s ↔ 点亮 2.01s）。
 - __dbg 探针：队列/时钟锚点/延迟/首音符。
+
+### 静态解析自查（用户方法论：本地 JS 解析、每版本 10 首自查）
+- web/inspect10.mjs：MA-2/3/5 各 10 首全量 dump（notes/通道/atr/waves/
+  voices/chTypes/title/dur），结论：三版本数据形态与 ma2play 设计一致。
+- **修复 1（ATR 不显示根因）**：回退 3f6dffb 时 mmf.js 一并回退，把
+  ATR 计数 + 通道类型解析（0706045 加的）丢了 → atrCount 恒 0。
+  已补回。全语料验证：MA-2 423 首中 70 首有 ATR 音轨。
+- **修复 2（注册表爆量）**：DefleMask 逐音符 SysEx 产生上万条重复注册
+  （Mirror And Mirror voices=10664）→ 按 (kind,bank,pc,vtype) 去重 → 253。
+- 版本分布（1484 首全语料，0 解析错误）：MA-2=423 / MA-3=431 /
+  MA-5=516 / MA-7=2 / 未知=112。
+- web/../core/bench_ma2.mjs：MA-2 速度基准工具就绪；
+  **MA-2 播放卡顿排查移交 imgui（ma2play）窗口做**（用户指示）。
