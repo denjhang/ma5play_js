@@ -176,3 +176,9 @@ smaf_window.cpp Render() 确认真实布局并复刻：
 - node：Sound_14 **38.5s 完整渲染**（谱面 38.4s）1.76x rt；Melody01 51.5s 1.73x。
 - 浏览器：Sound_14 连续播放 23s+（旧版 3.4s 即停），缓冲稳定 4s。
 - HPS 多轨通道 = c + t*4（RenderPianoArea 同规则）。
+
+### 切曲残留旧音根治（用户指出）
+- 旧顺序：淡出期间旧泵仍在产数据 → 清缓冲后仍有在途旧块落进新曲队列。
+- 新顺序（app.js loadTrack）：**postMessage stop 停旧泵 → 淡出已排队尾音
+  （120ms，含在途消息送达窗口）→ suspend → 清 queue/qFrames/blkOff →
+  才发 load**。清空后旧代字节不可能再进队（worker 已停 + id 过滤双保险）。

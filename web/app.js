@@ -161,18 +161,21 @@ async function loadTrack(name, buf, path) {
   S.switching = true;
   $('chipState').textContent = 'switch';
   try {
-    if (ctx && gainNode && S.playing) {        // 淡出旧曲
+    worker.postMessage({ cmd: 'stop' });       // 先停旧泵：之后不再有新 PCM 产生
+    if (ctx && gainNode && S.playing) {        // 淡出已排队的旧曲尾
       const t = ctx.currentTime;
       gainNode.gain.cancelScheduledValues(t);
       gainNode.gain.setValueAtTime(gainNode.gain.value, t);
-      gainNode.gain.linearRampToValueAtTime(0, t + 0.06);
-      await new Promise(r => setTimeout(r, 90));
+      gainNode.gain.linearRampToValueAtTime(0, t + 0.05);
+      await new Promise(r => setTimeout(r, 120));   // 淡出播完 + 在途消息全部送达
       ctx.suspend();
+    } else {
+      await new Promise(r => setTimeout(r, 30));    // 无需淡出也要等在途消息送达
     }
     S.playing = false; S.loaded = false; S.ended = false; S.coreEnded = false;
     S.name = name; S.curPath = path ?? null; S.size = buf.byteLength;
     S.playedFrames = 0;
-    S.queue = []; S.qFrames = 0; S.blkOff = 0;
+    S.queue = []; S.qFrames = 0; S.blkOff = 0;  // 此后不会再有旧代 PCM 进队
     S.meta = parseMMF(buf);
     piano.onTrack(S.meta);
     ensureAudio();

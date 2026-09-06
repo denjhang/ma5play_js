@@ -35,6 +35,7 @@ onmessage = async e => {
       setInterval(pump, 50);
     } catch (e) { postMessage({ type: 'error', msg: 'init: ' + e.message }); }
   }
+  if (msg.cmd === 'stop') { trackLoaded = false; }   // 立即停旧泵：切曲前先叫停，杜绝在途旧块
   if (msg.cmd === 'load' && M) {
     trackLoaded = true; outstanding = 0; trackId = msg.id;
     const p = M._malloc(msg.buf.byteLength);
