@@ -67,7 +67,7 @@ function bootWorker() {
     } else if (m.type === 'loaded') {
       if (m.ok) {
         S.loaded = true; S.ended = false; S.playing = true; S.priming = true;
-        S.playedFrames = 0;
+        S.playedFrames = 0; S.clkAt = undefined;
         $('trackName').textContent = S.name.replace(/\.mmf$/i, '');
         $('trackSize').textContent = (S.size / 1024).toFixed(1) + ' KB';
         showMeta();
@@ -109,10 +109,10 @@ function ensureAudio() {
   procNode.onaudioprocess = ev => {
     const L = ev.outputBuffer.getChannelData(0), R = ev.outputBuffer.getChannelData(1);
     S.spCalls = (S.spCalls || 0) + 1;
-    let fed = 0;
+    let fed = 0, i = 0;
     let blk = S.queue[0];
     let bi = S.blkOff || 0;                    // 跨回调持久：半块不重播
-    for (let i = 0; i < L.length; i++) {
+    for (; i < L.length; i++) {
       if (!blk) break;
       const l = blk.i16[bi * 2], r = blk.i16[bi * 2 + 1];
       L[i] = l / 32768; R[i] = r / 32768;
@@ -123,17 +123,26 @@ function ensureAudio() {
         blk = S.queue[0]; bi = 0;
       }
     }
+    for (; i < L.length; i++) L[i] = R[i] = 0;  // 欠载补静音
     S.blkOff = blk ? bi : 0;
     S.spFed = (S.spFed || 0) + fed;
     if (fed) S.playedFrames += fed;
-    else if (!S.priming && S.playing && !S.ended) {  // 欠载：静一拍回预滚
-      for (let i2 = 0; i2 < L.length; i2++) L[i2] = R[i2] = 0;
-    }
+    // 可视化时钟锚点：音频回调（~85ms 一次）只做校准，帧间用 ctx.currentTime
+    // 高频插值（ma2play 同步法），否则钢琴/通道表会按 85ms 台阶跳。
+    S.clkSong = S.playedFrames / FRAMES_PER_SEC;
+    S.clkAt = ctx.currentTime;
   };
   procNode.connect(gainNode);
   setInterval(tick, 100);                       // 定时器而非 rAF：后台/隐藏面板也要推进状态机
 }
 function applyVolume() { if (gainNode) gainNode.gain.value = muted ? 0 : $('vol').value / 100; }
+/* 可视化时钟（ma2play 同步法）：音频回调锚点 + ctx.currentTime 帧间插值，
+ * 减输出延迟对齐"正在听到"的时刻。suspend 时 currentTime 冻结 → 画面自然停住。 */
+function visClock() {
+  if (!ctx || S.clkAt === undefined) return Math.max(0, (S.playedFrames || 0) / FRAMES_PER_SEC);
+  const t = S.clkSong + Math.max(0, ctx.currentTime - S.clkAt);
+  return Math.max(0, t - (ctx.outputLatency || ctx.baseLatency || 0));
+}
 function fadeIn() {
   const t = ctx.currentTime;
   gainNode.gain.cancelScheduledValues(t);
@@ -160,7 +169,6 @@ function tick() {
     songEnd();
   }
   updateUI();
-  updateChTable(Math.max(0, (S.playedFrames / FRAMES_PER_SEC) - (ctx?.outputLatency || ctx?.baseLatency || 0)));
 }
 async function loadTrack(name, buf, path) {
   if (!S.workerReady || S.switching) return false;
@@ -180,7 +188,7 @@ async function loadTrack(name, buf, path) {
     }
     S.playing = false; S.loaded = false; S.ended = false; S.coreEnded = false;
     S.name = name; S.curPath = path ?? null; S.size = buf.byteLength;
-    S.playedFrames = 0;
+    S.playedFrames = 0; S.clkAt = undefined;
     S.queue = []; S.qFrames = 0; S.blkOff = 0;  // 此后不会再有旧代 PCM 进队
     S.meta = parseMMF(buf);
     piano.onTrack(S.meta);
@@ -213,7 +221,7 @@ function pause() {
   syncPlayBtn();
 }
 function stop() {
-  pause(); S.playedFrames = 0; piano.onTrack(S.meta); chOnTrack(S.meta);
+  pause(); S.playedFrames = 0; S.clkAt = undefined; piano.onTrack(S.meta); chOnTrack(S.meta);
   $('chipState').textContent = 'stop'; updateUI();
 }
 function syncPlayBtn() { $('btnPlay').textContent = S.playing ? '⏸' : '▶'; }
@@ -279,10 +287,8 @@ const piano = (() => {
       c.style.height = layout.cssH + 'px';
       g.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
-    // 同步时钟：音频消费帧数 − 输出延迟（双后端对齐点：播放走 ma5t、
-    // 可视化走 parser 乐谱，两者在此汇合）。延迟取 AudioContext 实测值。
-    const latency = (ctx?.outputLatency || ctx?.baseLatency || 0);
-    const t = Math.max(0, (S.playedFrames / FRAMES_PER_SEC) - latency);
+    // 同步时钟：音频回调锚点 + currentTime 插值（visClock），减输出延迟
+    const t = visClock();
     const active = new Map();
     const FADE = 0.12;                             // 键释放渐隐（秒）
     while (cursor < notes.length && notes[cursor].end < t - 0.5) cursor++;
@@ -340,6 +346,8 @@ const piano = (() => {
         }
       }
     });
+    // 通道表挂在钢琴 rAF 里（~50ms 节流），与时钟同帧更新，不另走定时器
+    if (S.loaded && (draw.chT = (draw.chT || 0) + 1) % 3 === 0) updateChTable(t);
   }
   requestAnimationFrame(draw);
   return { onTrack(meta) { notes = (meta?.notes ?? []).slice().sort((a, b) => a.t - b.t); cursor = 0; } };

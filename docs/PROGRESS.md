@@ -230,3 +230,12 @@ smaf_window.cpp Render() 确认真实布局并复刻：
   Exp/Event 列，sticky 表头，活跃行高亮；与钢琴同一音频时钟
   （playedFrames − outputLatency）驱动，tick 100ms 更新。
 - 替换原 48 格占位（48ch 快照仍留 AudioWorklet 阶段，届时换后端数据源）。
+
+### 可视化实时性修复（用户：反应慢、不实时）
+- 根因：可视化时钟直接读 playedFrames，只在 onaudioprocess（4096 帧 ≈ 85ms）
+  更新 → 钢琴/通道表按 85ms 台阶跳。
+- 修复 = ma2play 同步法：音频回调只做**锚点校准**（clkSong/clkAt），
+  帧间用 ctx.currentTime（连续、微秒级）插值 → visClock()；suspend 时
+  currentTime 冻结，画面自然停住。切曲/加载重置锚点。
+- 通道表从 100ms 定时器改挂钢琴 rAF（~50ms 节流），与时钟同帧更新。
+- 顺带修复：欠载时未填样本区显式补零。
