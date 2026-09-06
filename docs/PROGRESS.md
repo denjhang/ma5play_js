@@ -74,3 +74,21 @@ web:  node web/server.mjs   → http://127.0.0.1:8095
   实时消耗。修复 = **priming 预滚门控**：攒满 2s（PREROLL_FRAMES）才
   ctx.resume() 开声；播放中缓冲耗尽也回到 priming（欠载保护），不连续小口供声。
 - 切曲期间 switching 标志停 fillLoop，杜绝在半初始化 ctx 上 pump。
+
+## 2026-09-06（夜二）— 按 ma2play 布局重做文件浏览器
+
+用户指出第一版"文件选择器+播放历史"不是 ma2play 的设计。读
+smaf_window.cpp Render() 确认真实布局并复刻：
+
+```
+左栏 Controls(280px)：文件信息/播放控制/音量循环/本机文件打开
+右上：Scope + 通道状态占位（48ch F0-F15/P0-P31，快照待 worklet 阶段）
+右下左：文件浏览器 = 传输条(⏮▶⏭+时间+进度) + ‹›⌃导航 + 面包屑
+        + 文件夹历史下拉(localStorage, 20条) + [DIR]/文件列表
+右下右：Log 面板（时间戳，播放/导航/错误事件）
+```
+
+- server.mjs 加 /api/list（目录列表，目录在前）与 /api/file（仅 .mmf），
+  默认目录 ma2play/bin/mmf；仅监听 127.0.0.1。
+- 曲终自动下一曲（列表顺序）；循环开关优先。
+- 浏览器实测：面包屑/后退前进上级/文件夹历史/播放/上一曲下一曲/高亮当前曲 全通过。
