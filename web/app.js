@@ -265,7 +265,8 @@ const piano = (() => {
     let numWhite = 0;
     for (let n = MIN_NOTE; n <= MAX_NOTE; n++) if (!isBlack(n)) numWhite++;
     const wkW = cssW / (rows === 1 ? numWhite : Math.ceil(numWhite / 2));
-    const wkH = Math.min(Math.round(wkW * KEY_RATIO), shortVp ? 64 : 86);
+    const narrow = cssW < 700;
+    const wkH = Math.min(Math.round(wkW * KEY_RATIO), (shortVp || narrow) ? 60 : 86);
     const rowRanges = [];
     if (rows === 1) rowRanges.push([MIN_NOTE, MAX_NOTE]);
     else {
@@ -302,8 +303,9 @@ const piano = (() => {
       else if (nt.end > t - FADE) lv = Math.max(0, nt.vel / 127) * (1 - (t - nt.end) / FADE);  // 释放渐隐
       else continue;
       if (lv <= 0.02) continue;
-      const prev = active.get(nt.note);
-      if (!prev || lv > prev.lv) active.set(nt.note, { lv, ch: nt.ch });
+      const list = active.get(nt.note) ?? [];
+      list.push({ lv, ch: nt.ch });
+      active.set(nt.note, list);
       // 首个点亮日志：与静态解析摘要对比（t 应吻合 notes[0].t ± 延迟）
       if (!draw.litLogged && nt.end >= t) {
         draw.litLogged = true;
@@ -320,8 +322,16 @@ const piano = (() => {
         if (isBlack(n)) continue;
         const x = wkIdx * wkW;
         const a = active.get(n);
-        g.fillStyle = a ? blendKey(CH_COLORS[a.ch], a.lv, false) : 'rgb(255,255,255)';
-        g.fillRect(x, y, wkW - 1, wkH);
+        if (a?.length) {                            // 多通道同音：横向等分，各通道一色
+          const sw = (wkW - 1) / a.length;
+          a.forEach((seg, si) => {
+            g.fillStyle = blendKey(CH_COLORS[seg.ch], seg.lv, false);
+            g.fillRect(x + si * sw, y, sw, wkH);
+          });
+        } else {
+          g.fillStyle = 'rgb(255,255,255)';
+          g.fillRect(x, y, wkW - 1, wkH);
+        }
         g.strokeStyle = 'rgb(80,80,80)';
         g.strokeRect(x + 0.5, y + 0.5, wkW - 1, wkH - 1);
         if (n % 12 === 0) {                          // C 音名：始终显示（手机两行也标）
@@ -329,10 +339,10 @@ const piano = (() => {
           g.font = wkW > 14 ? '9px system-ui' : '8px system-ui';
           g.fillText(`C${(n / 12) - 1}`, x + 1, y + wkH - 3);
         }
-        if (a && wkW > 12) {
+        if (a?.length && wkW > 12) {
           g.fillStyle = 'rgba(0,0,0,0.78)';
           g.font = '8px system-ui';
-          g.fillText(CH_NAMES[a.ch], x + 1, y + 10);
+          g.fillText(CH_NAMES[a[0].ch], x + 1, y + 10);
         }
         wkIdx++;
       }
@@ -341,14 +351,22 @@ const piano = (() => {
         if (!isBlack(n)) { wkIdx++; continue; }
         const x = (wkIdx - 1) * wkW + wkW - bkW * 0.5;
         const a = active.get(n);
-        g.fillStyle = a ? blendKey(CH_COLORS[a.ch], a.lv, true) : 'rgb(20,20,20)';
-        g.fillRect(x, y, bkW, bkH);
+        if (a?.length) {
+          const sw = bkW / a.length;
+          a.forEach((seg, si) => {
+            g.fillStyle = blendKey(CH_COLORS[seg.ch], seg.lv, true);
+            g.fillRect(x + si * sw, y, sw, bkH);
+          });
+        } else {
+          g.fillStyle = 'rgb(20,20,20)';
+          g.fillRect(x, y, bkW, bkH);
+        }
         g.strokeStyle = 'rgb(0,0,0)';
         g.strokeRect(x + 0.5, y + 0.5, bkW - 1, bkH - 1);
-        if (a && bkW > 8) {
+        if (a?.length && bkW > 8) {
           g.fillStyle = 'rgba(255,255,255,0.78)';
           g.font = '8px system-ui';
-          g.fillText(CH_NAMES[a.ch], x + 1, y + 10);
+          g.fillText(CH_NAMES[a[0].ch], x + 1, y + 10);
         }
       }
     });
