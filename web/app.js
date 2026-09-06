@@ -312,10 +312,10 @@ const piano = (() => {
         g.fillRect(x, y, wkW - 1, wkH);
         g.strokeStyle = 'rgb(80,80,80)';
         g.strokeRect(x + 0.5, y + 0.5, wkW - 1, wkH - 1);
-        if (n % 12 === 0 && wkW > 16) {
+        if (n % 12 === 0) {                          // C 音名：始终显示（手机两行也标）
           g.fillStyle = 'rgba(0,0,0,0.7)';
-          g.font = '9px system-ui';
-          g.fillText(`C${(n / 12) - 1}`, x + 2, y + wkH - 4);
+          g.font = wkW > 14 ? '9px system-ui' : '8px system-ui';
+          g.fillText(`C${(n / 12) - 1}`, x + 1, y + wkH - 3);
         }
         if (a && wkW > 12) {
           g.fillStyle = 'rgba(0,0,0,0.78)';
