@@ -107,3 +107,14 @@ cd core && node smoke.mjs "D:\\...\\64poly\\Melody01.mmf" 5
 4. 每步完成即提交 + 更新本文件/PROGRESS.md，等用户说"继续"再推进下一步。
 5. 不动 dmplayer 仓库的任何文件（本项目只读引用）。
 6. 浏览器端资源按 README：ma5_ds.bin.z 用 DecompressionStream("deflate") 解压。
+
+## 铁律（用户 2026-09-06 严令）
+- **ma2play（imgui GUI）里 ma5t 后端完全正常**——Sound_14 等任何曲目都能完整播放。
+  **禁止怀疑 ma5t 核心、禁止怀疑 GUI 的正确性**。网页/wasm 侧任何"核心提前停"
+  的现象，都是**宿主泵节奏问题**，不是核心 bug。
+- `test_render_p.exe`（离线快泵渲染器）不等价于 GUI：它以最快速度泵，
+  而 GUI 按实时节奏泵；DLL 音序器的字节发射节奏依赖实时交错（round5b
+  已记录：waveOut 桩依赖真实时钟）。**离线渲染器停 ≠ 核心有问题**，
+  用离线 exe 的结果下"核心也停"的结论是错误的（2026-09-06 我犯过，被用户纠正）。
+- 唯一权威解析器 = ymf825emu/src/mmf_parser.cpp（用户指定参考），
+  web/mmf.js 是它的逐函数移植。

@@ -1,188 +1,348 @@
-// mmf.js — MMF/SMAF 解析（移植自 dmplayer libymf825_ma5/src/mmf_parser.cpp，parser 可视化路线）
-// 输出：{ version(2/3/5/7/0), title, notes:[{t,end,note,vel,ch}], durationMs }
-// 支持 formatType 0(HPS/MA-1/2)、2(MobileNormal/16ch)、3(Mobile32ch/MA-7)；
-// formatType 1(Huffman 压缩) 与 SEQU 暂不解析（notes 为空，不点亮钢琴）。
-const TIMEBASE = { 0x00: 1, 0x01: 2, 0x02: 4, 0x03: 5, 0x10: 10, 0x11: 20, 0x12: 40, 0x13: 50 };
+// mmf.js — 完整 MMF/SMAF 解析器（逐函数移植自 ymf825emu/src/mmf_parser.cpp）
+// 支持：MobileStandard(2)/MobileCompressed(1, Huffman)/HPS(0)/SEQU(-1)，
+//       MMMG 容器、独立 SEQU、多 MTR 轨、EXVO/Mtsu SysEx、CNTI 元信息。
+// 输出：{ version, maName, title, artist, notes[{t,end,note,vel,ch}], durationMs, tracks[] }
+// notes 的 note 已含 HPS/SEQU 八度移位；ch 为全局通道（HPS 多轨 = c + t*4）。
 
-function varint(u8, p, allow3) {           // 返回 [value, 新指针]
+const TIMEBASE = { 0x00: 1, 0x01: 2, 0x02: 4, 0x03: 5, 0x10: 10, 0x11: 20, 0x12: 40, 0x13: 50 };
+const SHORT_MOD = [0x00, 0x00, 0x08, 0x10, 0x18, 0x20, 0x28, 0x30, 0x38, 0x40, 0x48, 0x50, 0x60, 0x70, 0x7F, 0x7F];
+const SHORT_EXP = [0x00, 0x00, 0x1F, 0x27, 0x2F, 0x37, 0x3F, 0x47, 0x4F, 0x57, 0x5F, 0x67, 0x6F, 0x77, 0x7F, 0x7F];
+const SIG = { MMMD: 0x4D4D4D44, CNTI: 0x434E5449, MTR: 0x4D545200, ATR: 0x41545200, SEQU: 0x53455155, MMMG: 0x4D4D4D47, MTSQ: 0x4D747371, MTSU: 0x4D747375, EXVO: 0x4558564F };
+
+const u32 = (u8, p) => (u8[p] << 24 | u8[p + 1] << 16 | u8[p + 2] << 8 | u8[p + 3]) >>> 0;
+
+function varint(u8, p, rest, allow3) {         // read_variable_int
   let result = 0, i = 0;
-  while (p < u8.length) {
-    const b = u8[p++];
-    if (!allow3 && i === 1) return [(result + 0x80) | b, p];
+  while (rest > 0) {
+    const b = u8[p]; p++; rest--;
+    if (!allow3 && i === 1) return [(result + 0x80) | b, p, rest];
     result |= b & 0x7F;
     if (!(b & 0x80)) break;
     result <<= 7; i++;
   }
-  return [result, p];
+  return [result, p, rest];
 }
 
-// SysEx 独占数据扫描 → MA 版本（同 mmf_detect_version_from_exclusives）
-function detectVersion(excls) {
+/* -------- Huffman（MobileStandardCompressed）-------- */
+class BitReader {
+  constructor(u8, p, rest) { this.u8 = u8; this.p = p; this.rest = rest; this.buf = 0; this.bits = 0; }
+  readBit() {
+    if (this.bits === 0) {
+      if (this.rest <= 0) return false;
+      this.buf = this.u8[this.p++]; this.rest--; this.bits = 8;
+    }
+    const r = (this.buf & 0x80) !== 0;
+    this.buf = (this.buf << 1) & 0xFF; this.bits--;
+    return r;
+  }
+  readUint8() {
+    if (this.rest <= 0) return 0;
+    const b = this.u8[this.p++]; this.rest--;
+    const r = this.buf | (b >> this.bits);
+    this.buf = (b << (8 - this.bits)) & 0xFF;
+    return r & 0xFF;
+  }
+}
+function huffmanDecode(u8, p, rest) {          // 返回 [Uint8Array, 消费后p] 或 null
+  if (rest < 4) return null;
+  const outSize = u32(u8, p);
+  p += 4; rest -= 4;
+  const br = new BitReader(u8, p, rest);
+  const left = new Int32Array(511), right = new Int32Array(511);
+  let avail = 256;
+  const rstack = [];
+  let root = -1, rsp = 1;
+  rstack[0] = { phase: 0, my: -1, parent: -1, slot: 0 };
+  while (rsp > 0) {
+    const e = rstack[rsp - 1];
+    if (e.phase === 0) {
+      if (!br.readBit()) {                     // 叶：8 位值
+        const node = br.readUint8();
+        if (e.parent < 0) root = node;
+        else if (e.slot === 0) left[e.parent] = node; else right[e.parent] = node;
+        rsp--; continue;
+      }
+      const inode = avail++;
+      if (inode >= 511) { root = -1; break; }
+      if (e.parent < 0) root = inode;
+      else if (e.slot === 0) left[e.parent] = inode; else right[e.parent] = inode;
+      e.my = inode; e.phase = 1;
+      rstack[rsp++] = { phase: 0, my: -1, parent: inode, slot: 0 };
+    } else if (e.phase === 1) {
+      e.phase = 2;
+      rstack[rsp++] = { phase: 0, my: -1, parent: e.my, slot: 1 };
+    } else rsp--;
+  }
+  if (root < 0) return null;
+  const dst = new Uint8Array(outSize);
+  for (let k = 0; k < outSize; k++) {
+    let j = root;
+    let guard = 0;
+    while (j >= 256 && guard++ < 4096) j = br.readBit() ? right[j] : left[j];
+    dst[k] = j & 0xFF;
+  }
+  return [dst, br.p + (br.bits > 0 ? 1 : 0)];
+}
+
+/* -------- SysEx（read_exclusive，variable_length=true 路径）-------- */
+function readExclusive(u8, p, rest) {
+  let len;
+  [len, p, rest] = varint(u8, p, rest, true);
+  if (len <= 0) return [null, p, rest];
+  len--;                                       // 不含 F7
+  if (rest < len + 1) return [null, p, rest];
+  const data = u8.slice(p, p + len);
+  p += len; rest -= len;
+  p++; rest--;                                 // 结束标记（应为 F7）
+  return [data, p, rest];
+}
+
+/* -------- 事件解码：返回 {type,ch,note,vel,gate,...} 或 null -------- */
+function evHps(u8, p, rest, octShift) {
+  if (rest <= 0) return [null, p, rest];
+  let sig = u8[p]; p++; rest--;
+  if (sig === 0xFF) {
+    if (rest < 1) return [null, p, rest];
+    const s2 = u8[p]; p++; rest--;
+    if (s2 === 0x00) return [{ type: 'nop' }, p, rest];
+    if (s2 === 0xF0) { const [d, np, nr] = readExclusive(u8, p, rest); return [d ? { type: 'excl', data: d } : null, np, nr]; }
+    return [null, p, rest];
+  }
+  if (sig !== 0) {                             // 音符
+    const ch = sig >> 6, oct = (sig >> 4) & 3, nv = sig & 15;
+    let gate; [gate, p, rest] = varint(u8, p, rest, false);
+    return [{ type: 'note', ch, note: nv + (oct + 3) * 12, vel: 127, gate }, p, rest];
+  }
+  sig = u8[p]; p++; rest--;                    // 控制事件
+  const ch = sig >> 6, type2 = (sig >> 4) & 3;
+  if (type2 === 3) {
+    if (rest < 1) return [null, p, rest];
+    let v = u8[p]; p++; rest--;
+    switch (sig & 15) {
+      case 2: if (v >= 0x80) v = 0x80 - v; return [{ type: 'oct', ch, v }, p, rest];
+      default: return [{ type: 'nop' }, p, rest];   // PC/Bank/Bend/Vol/Pan/Exp（可视化不需要）
+    }
+  }
+  return [{ type: 'nop' }, p, rest];
+}
+function evMobile(u8, p, rest, fmt32) {
+  if (rest <= 0) return [null, p, rest];
+  let sig = u8[p]; p++; rest--;
+  const st = fmt32 ? (sig | 0x80) : sig;
+  const ch = st & 0x0F, status = st & 0xF0;
+  if (status === 0x90) {
+    if (rest < 2) return [null, p, rest];
+    const note = u8[p]; p++; rest--;
+    const vel = u8[p]; p++; rest--;
+    let gate; [gate, p, rest] = varint(u8, p, rest, true);
+    return [{ type: 'note', ch, note, vel, gate }, p, rest];
+  }
+  if (status === 0x80) {
+    if (rest < 1) return [null, p, rest];
+    p++; rest--;
+    let gate; [gate, p, rest] = varint(u8, p, rest, true);
+    return [{ type: 'nop' }, p, rest];
+  }
+  if (status === 0xB0) { p += 2; rest -= 2; return [{ type: 'nop' }, p, rest]; }
+  if (status === 0xC0) { p += 1; rest -= 1; return [{ type: 'nop' }, p, rest]; }
+  if (status === 0xE0) { p += 2; rest -= 2; return [{ type: 'nop' }, p, rest]; }
+  if (st === 0xF0) { const [d, np, nr] = readExclusive(u8, p, rest); return [d ? { type: 'excl', data: d } : null, np, nr]; }
+  if (st === 0xFF) { if (rest >= 1 && u8[p] === 0x00) { p++; rest--; } return [{ type: 'nop' }, p, rest]; }
+  return [null, p, rest];
+}
+function evSequ(u8, p, rest, octShift) {
+  if (rest <= 0) return [null, p, rest];
+  let sig = u8[p]; p++; rest--;
+  if (sig === 0x00) {
+    if (rest < 1) return [null, p, rest];
+    const s2 = u8[p]; p++; rest--;
+    const ch = s2 >> 6, msg = s2 & 0x3F;
+    if (msg === 0x00 || msg === 0x30 || msg === 0x31) {           // fine/PC/bank 带 1 参
+      if (rest >= 1) { p++; rest--; }
+      return [{ type: 'nop' }, p, rest];
+    }
+    if (msg === 0x32) {                                           // 八度移位
+      if (rest < 1) return [null, p, rest];
+      let v = u8[p]; p++; rest--;
+      if (v >= 0x80) v = 0x80 - v;
+      return [{ type: 'oct', ch, v }, p, rest];
+    }
+    return [{ type: 'nop' }, p, rest];
+  }
+  if (sig === 0xFF) {
+    if (rest >= 1 && u8[p] === 0x00) { p++; rest--; return [{ type: 'nop' }, p, rest]; }
+    if (rest >= 1 && u8[p] === 0xF0) { p++; const [d, np, nr] = readExclusive(u8, p, rest); return [d ? { type: 'excl', data: d } : null, np, nr]; }
+    return [null, p, rest];
+  }
+  const ch = sig >> 6, oct = (sig >> 4) & 3, nv = sig & 15;       // 音符（同 HPS）
+  let gate; [gate, p, rest] = varint(u8, p, rest, false);
+  return [{ type: 'note', ch, note: nv + (oct + 3) * 12, vel: 127, gate }, p, rest];
+}
+
+/* -------- MTSQ 序列数据（parse_sequence_data）-------- */
+function parseSequence(u8, off, size, fmt, chBase, out) {
+  let p = off, rest = size, src = u8;
+  if (fmt === 1) {                              // Huffman 解压
+    const r = huffmanDecode(u8, p, rest);
+    if (!r) return;
+    src = r[0]; p = 0; rest = src.length;
+  }
+  const durTb = out.durTb, gateTb = out.gateTb;
+  const octShift = new Int32Array(32);
+  const allow3 = fmt === 2 || fmt === 1;
+  let t = 0;
+  while (rest > 0) {
+    if (rest === 4 && !u32eq0(src, p)) break;   // 4 字节全零 EOS
+    if (rest === 4 && u32eq0(src, p)) break;
+    let d;
+    [d, p, rest] = varint(src, p, rest, allow3);
+    t += d * durTb;
+    let ev;
+    if (fmt === 0) [ev, p, rest] = evHps(src, p, rest, octShift);
+    else if (fmt === 2) [ev, p, rest] = evMobile(src, p, rest, false);
+    else if (fmt === 3) [ev, p, rest] = evMobile(src, p, rest, true);
+    else if (fmt === -1) [ev, p, rest] = evSequ(src, p, rest, octShift);
+    else break;
+    if (!ev) continue;
+    if (ev.type === 'oct') octShift[ev.ch] = ev.v;
+    else if (ev.type === 'note') {
+      const note = Math.max(0, Math.min(127, ev.note + octShift[ev.ch] * 12));
+      out.notes.push({ t, end: t + ev.gate * gateTb, note, vel: ev.vel, ch: ev.ch + chBase });
+    } else if (ev.type === 'excl') out.excls.push(ev.data);
+  }
+  out.durMs = Math.max(out.durMs, t);
+}
+const u32eq0 = (u8, p) => !u8[p] && !u8[p + 1] && !u8[p + 2] && !u8[p + 3];
+
+/* -------- MTR 轨（parse_score_track）-------- */
+function parseTrack(u8, off, size, chBase, out) {
+  if (size < 4) return;
+  const fmt = u8[off];                          // 0=HPS 1=压缩 2=普通 3=32ch(-1=SEQU 走上层)
+  out.tracks.push({ format: fmt, seqType: u8[off + 1] });
+  out.durTb = TIMEBASE[u8[off + 2]] ?? 2;
+  out.gateTb = TIMEBASE[u8[off + 3]] ?? 2;
+  let p = off + 4;
+  const end = off + size;
+  p += fmt === 0 ? 2 : (fmt === 3 ? 32 : 16);   // 通道状态区
+  while (p + 8 <= end) {
+    const sig = u32(u8, p), csz = u32(u8, p + 4);
+    p += 8;
+    if (p + csz > end) break;
+    if (sig === SIG.MTSQ) parseSequence(u8, p, csz, fmt, chBase, out);
+    else if (sig === SIG.MTSU) {                // Setup：F0 SysEx 序列（FF 跳过）
+      let q = p; const e = p + csz;
+      while (q < e) {
+        const s = u8[q];
+        if (s === 0xFF) { q++; continue; }
+        if (s === 0xF0) {
+          let len; [len, q] = varint(u8, q + 1, e - q - 1, true);
+          if (len > 0 && q + len - 1 <= e) {
+            out.excls.push(u8.slice(q, q + len - 1));
+            q += len - 1;
+            if (u8[q] === 0xF7) q++;
+          } else break;
+        } else break;
+      }
+    } else if (sig === SIG.EXVO) {              // 整块 SysEx
+      let len; [len] = varint(u8, p, csz, true);
+      if (len > 0) out.excls.push(u8.slice(p + 1, p + 1 + len - 1 > end ? end : p + len - 1));
+    }
+    p += csz;
+  }
+}
+
+/* -------- CNTI（parse_cnti + optional fields + Mx: 版本）-------- */
+function parseCnti(u8, off, size, out) {
+  if (size < 5) return;
+  const end = off + size;
+  out.cntiStream = u8.slice(off + 5, end);
+  const txt = s => { let r = ''; for (const c of s) if (c >= 0x20 && c < 0x7F) r += String.fromCharCode(c); return r; };
+  if (u8[off + 2] !== 0x00) {                   // 逗号分隔 tag:value 文本
+    const s = txt(out.cntiStream);
+    const grab = tag => { const m = s.match(new RegExp(`(?:^|,)${tag}:([^,]*)`)); return m ? m[1].trim() : ''; };
+    out.title = grab('ST'); out.artist = grab('AN');
+    return;
+  }
+  // tag(2) + u16len 对
+  let i = 0; const st = out.cntiStream;
+  while (i + 4 < st.length) {
+    const tag = String.fromCharCode(st[i], st[i + 1]); i += 2;
+    const sz = (st[i] << 8) | st[i + 1]; i += 2;
+    if (i + sz > st.length) break;
+    const val = txt(st.subarray(i, i + sz));
+    if (tag === 'ST') out.title = val;
+    if (tag === 'AN') out.artist = val;
+    i += sz;
+  }
+}
+function versionFromCnti(stream) {              // mmf_detect_version_from_cnti
+  for (let i = 0; i + 2 < stream.length; i++)
+    if (stream[i] === 0x4D && stream[i + 1] >= 0x31 && stream[i + 1] <= 0x37 && stream[i + 2] === 0x3A)
+      return stream[i + 1] - 0x30;
+  return 0;
+}
+function versionFromExcls(excls) {              // mmf_detect_version_from_exclusives
   let v = 0;
   for (const d of excls) {
-    if (d.length >= 4 && d[0] === 0x43 && d[1] === 0x79 && d[2] === 0x08 && d[3] === 0x7F) { v = 7; continue; }
-    if (d.length >= 5 && d[0] === 0x43 && d[1] === 0x79 && d[2] === 0x07 && d[3] === 0x7F) { if (v !== 7) v = 5; continue; }
-    if (d.length >= 4 && d[0] === 0x43 && d[1] === 0x79 && d[2] === 0x06 && d[3] === 0x7F) { if (v !== 5 && v !== 7) v = 3; continue; }
-    if (d.length >= 3 && d[0] === 0x43 && d[1] === 0x05 && d[2] === 0x01) { if (v !== 5 && v !== 3) v = 5; }
-    else if (d.length >= 3 && d[0] === 0x43 && d[1] === 0x05 && d[2] === 0x02) { if (v !== 5 && v !== 3) v = 5; }
-    else if (d.length >= 2 && d[0] === 0x43 && d[1] === 0x03) { if (!v) v = 2; }
-    else if (d.length >= 2 && d[0] === 0x43 && d[1] === 0x02) { if (!v) v = 2; }
+    const L = d.length;
+    if (L >= 4 && d[0] === 0x43 && d[1] === 0x79 && d[2] === 0x08 && d[3] === 0x7F) { v = 7; continue; }
+    if (L >= 5 && d[0] === 0x43 && d[1] === 0x79 && d[2] === 0x07 && d[3] === 0x7F) { if (v !== 7) v = 5; continue; }
+    if (L >= 4 && d[0] === 0x43 && d[1] === 0x79 && d[2] === 0x06 && d[3] === 0x7F) { if (v !== 5 && v !== 7) v = 3; continue; }
+    if (L >= 3 && d[0] === 0x43 && d[1] === 0x05 && d[2] === 0x01) { if (v !== 5 && v !== 3) v = 5; }
+    else if (L >= 3 && d[0] === 0x43 && d[1] === 0x05 && d[2] === 0x02) { if (v !== 5 && v !== 3) v = 5; }
+    else if (L >= 2 && d[0] === 0x43 && d[1] === 0x03) { if (!v) v = 2; }
+    else if (L >= 2 && d[0] === 0x43 && d[1] === 0x02) { if (!v) v = 2; }
   }
   return v;
 }
 
-// CNTI 标题：code_type!=0 时为逗号分隔 "ST:标题" 文本；=0 时为 tag+u16len 对
-function parseCntiTitle(u8, off, size) {
-  const end = off + size;
-  if (size < 5) return '';
-  const ascii = (a, b) => {
-    let s = '';
-    for (let i = a; i < b; i++) { const c = u8[i]; if (c >= 0x20 && c < 0x7F) s += String.fromCharCode(c); }
-    return s;
-  };
-  if (u8[off + 2] !== 0x00) {               // 逗号分隔 "M2:x,L2:x,ST:title,..."
-    const m = ascii(off + 5, end).match(/(?:^|,)ST:([^,]*)/);
-    return m ? m[1].trim() : '';
-  }
-  let i = off + 5;                          // tag-value 对
-  while (i + 4 < end) {
-    const tag = String.fromCharCode(u8[i], u8[i + 1]); i += 2;
-    const sz = (u8[i] << 8) | u8[i + 1]; i += 2;
-    if (i + sz > end) break;
-    if (tag === 'ST') return ascii(i, i + sz).trim();
-    i += sz;
-  }
-  return '';
-}
-
-// SysEx 数据读：p 指向 F0 之后的长度 varint，格式 = F0 + len(varint) + 数据 + F7
-function readExclusive(u8, p, end) {
-  let len, q;
-  [len, q] = varint(u8, p, false);
-  const out = [];
-  for (let i = 0; i < len && q < end; i++) out.push(u8[q++]);
-  if (q < end && u8[q] === 0xF7) q++;         // 跳终结符
-  return [out.slice(0, 64), q];
-}
-
-function parseTrackEvents(u8, off, size, notes) {
-  const fmt = u8[off];
-  const durTb = TIMEBASE[u8[off + 2]] ?? 2;
-  const gateTb = TIMEBASE[u8[off + 3]] ?? 2;
-  let p = off + 4;
-  const end = off + size;
-  // 通道状态区
-  if (fmt === 0) p += 2;
-  else if (fmt === 3) p += 32;
-  else p += 16;
-  // 子块
-  let mtsq = null, mtsu = null;
+/* -------- 主入口（mmf_parse）-------- */
+export function parseMMF(buf) {
+  const u8 = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  const out = { version: 0, maName: 'Unknown', title: '', artist: '', notes: [], excls: [], tracks: [], durationMs: 0, error: '' };
+  if (u8.length < 12 || u32(u8, 0) !== SIG.MMMD) { out.error = 'not MMF'; return out; }
+  let p = 8;
+  const end = u8.length - 2;                    // 尾部 CRC
+  let trackIdx = 0;
+  const out1 = { ...out, notes: [], excls: [], tracks: [], durTb: 2, gateTb: 2, durMs: 0 };
   while (p + 8 <= end) {
-    const sig = (u8[p] << 24) | (u8[p + 1] << 16) | (u8[p + 2] << 8) | u8[p + 3];
-    const csz = (u8[p + 4] << 24) | (u8[p + 5] << 16) | (u8[p + 6] << 8) | u8[p + 7];
+    const sig = u32(u8, p), csz = u32(u8, p + 4);
     p += 8;
     if (p + csz > end) break;
-    if (sig === 0x4D747371) mtsq = [p, csz];
-    else if (sig === 0x4D747375) mtsu = [p, csz];
-    else if (sig === 0x4558564F) {          // "EXVO"：整块 SysEx
-      const [d] = readExclusive(u8, p + 1, p + csz);
-      excls.push(d);
+    if (sig === SIG.CNTI) parseCnti(u8, p, csz, out1);
+    else if ((sig & 0xFFFFFF00) === SIG.MTR) {
+      const fmt = u8[p];
+      const chBase = (fmt === 0) ? trackIdx * 4 : 0;   // HPS 多轨：全局通道 = c + t*4
+      parseTrack(u8, p, csz, chBase, out1);
+      trackIdx++;
+    } else if (sig === SIG.SEQU) {              // 独立 SEQU（无 MMMG 包装）
+      out1.tracks.push({ format: -1, seqType: 0 });
+      out1.durTb = out1.gateTb = 1;
+      parseSequence(u8, p, csz, -1, 0, out1);
+      trackIdx++;
+    } else if (sig === SIG.MMMG) {              // MMMG：2 字节 enigma 后为子块
+      let q = p + 2;
+      const me = p + csz;
+      while (q + 8 <= me) {
+        const msig = u32(u8, q), mcsz = u32(u8, q + 4);
+        q += 8;
+        if (q + mcsz > me) break;
+        if ((msig & 0xFFFFFF00) === SIG.MTR) {
+          const fmt = u8[q];
+          parseTrack(u8, q, mcsz, fmt === 0 ? trackIdx * 4 : 0, out1);
+          trackIdx++;
+        } else if (msig === SIG.EXVO) {
+          let len; [len] = varint(u8, q, mcsz, true);
+          if (len > 0) out1.excls.push(u8.slice(q + 1, q + len - 1 > me ? me : q + len - 1));
+        }
+        q += mcsz;
+      }
     }
     p += csz;
   }
-  const excls = [];
-  if (mtsu) {                               // Mtsu：F0 SysEx 序列
-    let q = mtsu[0]; const e = mtsu[0] + mtsu[1];
-    while (q < e) {
-      const s = u8[q];
-      if (s === 0xFF) { q++; continue; }
-      if (s === 0xF0) { const [d, nq] = readExclusive(u8, q, e); excls.push(d); q = nq; }
-      else break;
-    }
-  }
-  let durMs = 0;
-  if (mtsq && (fmt === 0 || fmt === 2 || fmt === 3)) {
-    let q = mtsq[0]; const e = mtsq[0] + mtsq[1];
-    let t = 0;
-    const allow3 = fmt !== 0;
-    const lastVel = new Array(32).fill(0);
-    const octShift = new Array(32).fill(0);
-    while (q < e) {
-      if (e - q === 4 && !u8[q] && !u8[q + 1] && !u8[q + 2] && !u8[q + 3]) break;  // EOS
-      let d, gate;
-      [d, q] = varint(u8, q, allow3);
-      t += d * durTb;
-      if (q >= e) break;
-      const sig = u8[q++];
-      if (fmt === 0) {
-        // HPS：非零 sig = 音符（ch=sig>>6 oct=(sig>>4)&3 note=sig&15）
-        if (sig !== 0xFF && sig !== 0) {
-          [gate, q] = varint(u8, q, false);
-          const ch = sig >> 6;
-          const note = (sig & 15) + (((sig >> 4) & 3) + 3) * 12 + octShift[ch] * 12;
-          notes.push({ t, end: t + gate * gateTb, note, vel: 127, ch });
-        } else if (sig === 0xFF) {
-          if (q < e && u8[q] === 0) { q++; }
-          else if (q < e && u8[q] === 0xF0) { const [dd, nq] = readExclusive(u8, q + 1, e); excls.push(dd); q = nq; }
-        } else {
-          // sig==0：控制事件
-          if (q >= e) break;
-          const c = u8[q++];
-          const ch = c >> 6, type2 = (c >> 4) & 3, sub = c & 15;
-          if (type2 === 3) {
-            if (q < e) { const v = u8[q++]; if (sub === 2) { let ov = v >= 0x80 ? 0x80 - v : v; octShift[ch] = ov; } }
-          } else if (type2 === 0 && q < e) q++;      // 2 参数控制，跳过
-        }
-      } else {
-        // Mobile normal / 32ch：MIDI 风格
-        const st = fmt === 3 ? (sig | 0x80) : sig;
-        const ch = st & 0x0F, status = st & 0xF0;
-        if (status === 0x90) {
-          if (q >= e) break;
-          const note = u8[q++];
-          if (q >= e) break;
-          const vel = u8[q++]; lastVel[ch] = vel;
-          [gate, q] = varint(u8, q, true);
-          if (vel > 0) notes.push({ t, end: t + gate * gateTb, note, vel, ch });
-        } else if (status === 0x80) {
-          if (q >= e) break;
-          q++;                                    // note
-          [gate, q] = varint(u8, q, true);        // dur
-        } else if (status === 0xB0) { q += 2; }
-        else if (status === 0xC0) { q += 1; }
-        else if (status === 0xE0) { q += 2; }
-        else if (st === 0xF0) { const [dd, nq] = readExclusive(u8, q, e); excls.push(dd); q = nq; }
-        else if (st === 0xFF) { if (q < e && u8[q] === 0) q++; }
-      }
-    }
-    durMs = t;
-  }
-  return { excls, durMs };
-}
-
-export function parseMMF(buf) {
-  const u8 = new Uint8Array(buf);
-  const notes = [];
-  const excls = [];
-  let title = '', durMs = 0;
-  if (u8.length < 16 || u8[0] !== 0x4D || u8[1] !== 0x4D && u8[1] !== 0x4D) {
-    // 容器头 "MMMD"
-  }
-  if (!(u8[0] === 0x4D && u8[1] === 0x4D && u8[2] === 0x4D && u8[3] === 0x44)) return { version: 0, title, notes, durationMs: 0 };
-  let p = 8;                                 // MMMD(4) + 总长 u32(4)，块从 8 起
-  const end = u8.length;
-  while (p + 8 <= end) {
-    const sz = (u8[p + 4] << 24) | (u8[p + 5] << 16) | (u8[p + 6] << 8) | u8[p + 7];
-    const sig = (u8[p] << 24) | (u8[p + 1] << 16) | (u8[p + 2] << 8) | u8[p + 3];
-    const body = p + 8;
-    if (body + sz > end) break;
-    if (sig === 0x434E5449) title = parseCntiTitle(u8, body, sz);
-    else if ((sig & 0xFFFFFF00) === 0x4D545200) {
-      const r = parseTrackEvents(u8, body, sz, notes);
-      excls.push(...r.excls);
-      durMs = Math.max(durMs, r.durMs);
-    }
-    p = body + sz;
-  }
-  return { version: detectVersion(excls), title, notes, durationMs: durMs };
+  out1.version = versionFromCnti(out1.cntiStream ?? new Uint8Array(0)) || versionFromExcls(out1.excls);
+  out1.maName = { 1: 'MA-1', 2: 'MA-2', 3: 'MA-3', 5: 'MA-5', 7: 'MA-7' }[out1.version] ?? 'Unknown';
+  // 曲长 = 最后事件时间与最长音符结束的较大者
+  out1.durationMs = Math.max(out1.durMs || 0, ...out1.notes.map(n => n.end), 0);
+  return out1;
 }

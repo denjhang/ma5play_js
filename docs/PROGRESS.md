@@ -144,3 +144,35 @@ smaf_window.cpp Render() 确认真实布局并复刻：
 - 点击 "..." 或面包屑空白处 → 路径输入模式（Enter 导航 / Esc 取消），
   同 ma2play s_pathEditMode。
 - logo/favicon = ma2play app_icon.ico（ICO 内嵌 PNG，取 256px，prepare.sh 再生）。
+
+## 2026-09-06（四）— 核心源切换 libma5t_compact（Sound_14 提前停曲修复）
+
+### 根因（用户严令纠正后的结论）
+- Sound_14（38.4s/97 音符）在 exp 源 wasm 只出 3.4s。真凶 = **用错了源**：
+  libma5t_exp 是离线实验目录；GUI ma5t 后端（ma2play/src/core/ma5t_backend.cpp）
+  用的是 **libma5t_compact**（ma5p_* API）。两者曲终判定不同：
+  exp 的 test_render 用 no_pcm>5；compact 的 ma5p_pump 用 **no_pcm>100**
+  （round19 教训：melody11 有 >5 泵的短暂断流，5 会误杀）。
+- 另一条红线：test_render_p.exe（离线快泵）≠ GUI 行为，不能当核心真值
+  （DLL 音序器节奏依赖实时交错）。GUI 完全正常 = 核心 ground truth。
+
+### wasm 切换到 compact
+- build.sh SRC → libma5t_compact 五件套；ma5t_player.c 不编（依赖 zlib/windows），
+  其 ma5p_pump 语义照抄进 ma5play_shell.c（no_pcm>100 + 出声后 2s 全零丢尾）。
+- compact host 从磁盘找 DLL → web 构建把 M5_EmuSmw5/Hw.dll 打进 MEMFS
+  （--preload-file，.data 3.1MB）；GetModuleFileNameA 在 shell 补桩。
+- 预载映像换 **ma5_ds.bin.z**（4B 小端原始长度 + zlib 流，4.3MB），
+  worker 里 DecompressionStream('deflate') 解压（= zlib 包装，18.9MB）。
+- shell 新增 ma5w_pause/resume/seek_play（compact host 有 ma5t_pause/seek/
+  start_play——seek 能力的入口，后续进度条拖动用）。
+
+### 完整 MMF 解析器（web/mmf.js 重写，用户指定参考 ymf825emu/src/mmf_parser.cpp）
+- 逐函数移植：Huffman 解压(MobileCompressed)、HPS/SEQU 事件、MMMG 容器、
+  独立 SEQU、EXVO/Mtsu SysEx、CNTI 标题(Mx: 版本/ST 标题/AN 艺术家)。
+- 实测：Sound_14=MA-5 38.4s/97notes、Sound_15=MA-5 23.3s、Melody01=MA-5 49.8s、
+  Dot Beat=MA-2 22.0s、BrilliantSnow=MA-2 44.2s。
+
+### 验证
+- node：Sound_14 **38.5s 完整渲染**（谱面 38.4s）1.76x rt；Melody01 51.5s 1.73x。
+- 浏览器：Sound_14 连续播放 23s+（旧版 3.4s 即停），缓冲稳定 4s。
+- HPS 多轨通道 = c + t*4（RenderPianoArea 同规则）。

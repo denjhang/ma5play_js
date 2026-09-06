@@ -6,7 +6,7 @@
 set -e
 export PATH="/ucrt64/bin:$PATH"   # emcc 二进制工具（wasm-opt 等）在此
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-SRC="${MA5T_SRC:-/d/working/vscode-projects/YM2163-Midi/Denjhang_Music_Player_v16/ma2play/libma5t_exp}"
+SRC="${MA5T_SRC:-/d/working/vscode-projects/YM2163-Midi/Denjhang_Music_Player_v16/ma2play/libma5t_compact}"
 OUT="$ROOT/build"
 MODE="${1:-node}"
 
@@ -17,7 +17,7 @@ CFLAGS="$OPT -w -I$SRC -include uc_shim.h -DI386_ENABLE_FPU -DI386_NATIVE_HOOKS 
 WFLAGS="-sALLOW_MEMORY_GROWTH=1 -sMAXIMUM_MEMORY=4GB -sINITIAL_MEMORY=64MB \
   -sSTACK_SIZE=16MB \
   -sMODULARIZE=1 -sEXPORT_NAME=ma5play \
-  -sEXPORTED_FUNCTIONS=_ma5w_set_preload,_ma5w_init,_ma5w_load,_ma5w_open_standby_start,_ma5w_pump_seq,_ma5w_pump_audio,_ma5w_take_pcm,_ma5w_last_error,_ma5w_compact_mode,_ma5w_loaded,_malloc,_free \
+  -sEXPORTED_FUNCTIONS=_ma5w_set_preload,_ma5w_init,_ma5w_load,_ma5w_pump,_ma5w_pause,_ma5w_resume,_ma5w_seek_play,_ma5w_ended,_ma5w_played_ms,_ma5w_last_error,_ma5w_compact_mode,_ma5w_loaded,_malloc,_free \
   -sEXPORTED_RUNTIME_METHODS=ccall,HEAPU8"
 
 mkdir -p "$OUT"
@@ -28,8 +28,10 @@ if [ "$MODE" = "node" ]; then
     $SRCS -o "$OUT/ma5play_node.js"
   echo "node 变体 -> $OUT/ma5play_node.js"
 else
-  # web: 预载映像 fetch 后灌堆（ma5w_set_preload），零 FS 依赖
+  # web: DLL 打进 MEMFS（compact host 从 cwd 磁盘找 DLL）；预载映像走 fetch
   /ucrt64/lib/emscripten/emcc $CFLAGS $WFLAGS -sENVIRONMENT=web,worker \
+    --preload-file "$SRC/M5_EmuSmw5.dll@/M5_EmuSmw5.dll" \
+    --preload-file "$SRC/M5_EmuHw.dll@/M5_EmuHw.dll" \
     $SRCS -o "$OUT/ma5play.js"
-  echo "web 变体 -> $OUT/ma5play.js(.wasm)"
+  echo "web 变体 -> $OUT/ma5play.js(.wasm/.data)"
 fi

@@ -42,6 +42,7 @@ function bootWorker() {
   worker = new Worker('render-worker.js');
   worker.onmessage = e => {
     const m = e.data;
+    if (m.id !== undefined && m.id !== S.loadId) return;   // 旧代消息：切曲后迟到，丢弃
     if (m.type === 'ready') {
       S.workerReady = true;
       $('chipMode').textContent = m.compact ? 'compact 预载' : 'flat';
@@ -74,7 +75,7 @@ function bootWorker() {
       }
       S.switching = false;
     } else if (m.type === 'log') { log('[w] ' + m.msg); }
-    else if (m.type === 'end') { songEnd(); }
+    else if (m.type === 'end') { S.coreEnded = true; }   // 核心渲染完毕：缓冲播完后才曲终
     else if (m.type === 'error') { status('核心错误: ' + m.msg, false); log('[core] ' + m.msg); }
   };
   worker.onerror = e => log('[worker] ' + e.message);
@@ -135,16 +136,21 @@ function fadeIn() {
 
 function tick() {
   if (!S.loaded) return;
-  // 预滚完成 → 开声；播放中耗尽 → 回预滚（攒满再续，不连续小口供声）
-  if (S.priming && S.playing && S.qFrames >= PREROLL_FRAMES) {
+  if (S.priming && S.playing && (S.qFrames >= PREROLL_FRAMES || (S.coreEnded && S.qFrames > 2400))) {
+    // 预滚完成 → 开声（核心已渲染完时不足 2s 也开播——超短曲）
     S.priming = false;
     fadeIn();
     ctx.resume();
     $('chipState').textContent = 'playing';
-  } else if (!S.priming && S.playing && ctx.state === 'running' && S.qFrames === 0 && !S.ended) {
-    S.priming = true;
-    ctx.suspend();
-    $('chipState').textContent = 'buffering';
+  } else if (!S.priming && S.playing && ctx.state === 'running' && S.qFrames === 0) {
+    if (S.coreEnded) songEnd();                 // 缓冲播完 + 核心完毕 = 曲终
+    else if (!S.ended) {                        // 欠载：回预滚攒满再续
+      S.priming = true;
+      ctx.suspend();
+      $('chipState').textContent = 'buffering';
+    }
+  } else if (S.coreEnded && S.qFrames === 0 && !S.ended && !S.priming) {
+    songEnd();
   }
   updateUI();
 }
@@ -163,14 +169,15 @@ async function loadTrack(name, buf, path) {
       await new Promise(r => setTimeout(r, 90));
       ctx.suspend();
     }
-    S.playing = false; S.loaded = false; S.ended = false;
+    S.playing = false; S.loaded = false; S.ended = false; S.coreEnded = false;
     S.name = name; S.curPath = path ?? null; S.size = buf.byteLength;
     S.playedFrames = 0;
     S.queue = []; S.qFrames = 0; S.blkOff = 0;
     S.meta = parseMMF(buf);
     piano.onTrack(S.meta);
     ensureAudio();
-    worker.postMessage({ cmd: 'load', buf }, [buf]);
+    S.loadId = (S.loadId || 0) + 1;
+    worker.postMessage({ cmd: 'load', id: S.loadId, buf }, [buf]);
     return true;
   } catch (e) {
     log('[load] ' + e.message);
