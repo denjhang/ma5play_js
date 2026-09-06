@@ -250,3 +250,12 @@ smaf_window.cpp Render() 确认真实布局并复刻：
   - `[vis] piano first key lit @ t=X.XXs note=C#4 ch=4`（首个点亮）
   - Sound_1 验证：解析首音符 t=2.0s ↔ 点亮 2.01s，吻合。
 - __dbg 探针扩展：visT/clkSong/clkAt/now/latency/n0/chEv0。
+
+### 通道表 ext/PCM 区 + 2s 延迟修复
+- mmf.js 补 Mtsp/Mwa 波形块解析（type/stereo/Hz/size）+ SysEx 内嵌波检测
+  （43 79 07 7F 03 waveId / 43 05 00 waveId）→ waves[]。
+- 通道表追加 "PCM Waves (ext / Mwa / inline)" 分组行（W# / 来源 / 波号 /
+  采样率 / 单声道立体 / 大小）；ch9 鼓音符显示 GM 打击鼓名（35-81 全表）。
+- 2 秒延迟根因：outputLatency 在蓝牙/部分 webview 报 1~2s，全额扣减把
+  画面拖后。封顶 150ms。
+- 实测：LG Sound_1 waves=4 Inline、Melody05 waves=2（#1/#93 电吉他流）。

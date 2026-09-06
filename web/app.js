@@ -141,7 +141,10 @@ function applyVolume() { if (gainNode) gainNode.gain.value = muted ? 0 : $('vol'
 function visClock() {
   if (!ctx || S.clkAt === undefined) return Math.max(0, (S.playedFrames || 0) / FRAMES_PER_SEC);
   const t = S.clkSong + Math.max(0, ctx.currentTime - S.clkAt);
-  return Math.max(0, t - (ctx.outputLatency || ctx.baseLatency || 0));
+  // 延迟补偿封顶 150ms：蓝牙/部分 webview 会报 1~2s 的 outputLatency，
+  // 全额减掉会让画面落后声音数秒（实测症状"延迟2秒"）。
+  const lat = Math.min(ctx.outputLatency || ctx.baseLatency || 0, 0.15);
+  return Math.max(0, t - lat);
 }
 function fadeIn() {
   const t = ctx.currentTime;
@@ -388,6 +391,7 @@ function updateUI() {
 /* ---------------- 通道表（ma2play 通道可视化同款：Ch/Prog/Note/Vol/Pan/Exp/Event） ---------------- */
 const GM_NAMES = ['AcGrandPiano','BrightPiano','ElectricGrand','HonkyTonk','ElectricPiano1','ElectricPiano2','Harpsichord','Clavinet','Celesta','Glockenspiel','MusicBox','Vibraphone','Marimba','Xylophone','TubularBells','Dulcimer','DrawbarOrgan','PercOrgan','RockOrgan','ChurchOrgan','ReedOrgan','Accordion','Harmonica','TangoAccord','AcGuitarNylon','AcGuitarSteel','JazzGuitar','CleanGuitar','MutedGuitar','OverdriveGuitar','DistortionGuitar','GuitarHarmonics','AcBass','FingerBass','PickBass','FretlessBass','SlapBass1','SlapBass2','SynthBass1','SynthBass2','Violin','Viola','Cello','Contrabass','TremoloStrings','Pizzicato','OrchestralHarp','Timpani','StringEns1','StringEns2','SynthStrings1','SynthStrings2','ChoirAahs','VoiceOohs','SynthVox','OrchestraHit','Trumpet','Trombone','Tuba','MutedTrumpet','FrenchHorn','BrassSection','SynthBrass1','SynthBrass2','SopranoSax','AltoSax','TenorSax','BaritoneSax','Oboe','EnglishHorn','Bassoon','Clarinet','Piccolo','Flute','Recorder','PanFlute','BlownBottle','Shakuhachi','Whistle','Ocarina','SquareLead','SawLead','CalliopeLead','ChiffLead','CharangLead','VoiceLead','FifthLead','BassLead','NewAgePad','WarmPad','PolySynthPad','ChoirPad','BowedPad','MetallicPad','HaloPad','SweepPad','Rain','Soundtrack','Crystal','Atmosphere','Brightness','Goblins','Echoes','SciFi','Sitar','Banjo','Shamisen','Koto','Kalimba','Bagpipe','Fiddle','Shanai','TinkleBell','Agogo','SteelDrums','Woodblock','TaikoDrum','MelodicTom','SynthDrum','ReverseCymbal','GuitarFretNoise','BreathNoise','Seashore','BirdTweet','Telephone','Helicopter','Applause','Gunshot'];
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const GM_DRUMS = { 35:'Acoustic Bass Drum',36:'Bass Drum 1',37:'Side Stick',38:'Acoustic Snare',39:'Hand Clap',40:'Electric Snare',41:'Low Floor Tom',42:'Closed Hi-Hat',43:'High Floor Tom',44:'Pedal Hi-Hat',45:'Low Tom',46:'Open Hi-Hat',47:'Low-Mid Tom',48:'Hi-Mid Tom',49:'Crash Cymbal 1',50:'High Tom',51:'Ride Cymbal 1',52:'Chinese Cymbal',53:'Ride Bell',54:'Tambourine',55:'Splash Cymbal',56:'Cowbell',57:'Crash Cymbal 2',58:'Vibraslap',59:'Ride Cymbal 2',60:'Hi Bongo',61:'Low Bongo',62:'Mute Hi Conga',63:'Open Hi Conga',64:'Low Conga',65:'High Timbale',66:'Low Timbale',67:'High Agogo',68:'Low Agogo',69:'Cabasa',70:'Maracas',71:'Short Whistle',72:'Long Whistle',73:'Short Guiro',74:'Long Guiro',75:'Claves',76:'Hi Wood Block',77:'Low Wood Block',78:'Mute Cuica',79:'Open Cuica',80:'Mute Triangle',81:'Open Triangle' };
 const noteName = n => n >= 0 && n <= 127 ? NOTE_NAMES[n % 12] + ((n / 12 | 0) - 1) : '--';
 const chVis = { chans: [] };
 
@@ -404,6 +408,29 @@ function buildChGrid() {
   tb.appendChild(body);
   chVis.chans = Array.from({ length: 16 }, () => ({ ev: [], ei: 0, notes: [], ni: 0, pc: -1, vol: 100, pan: 64, exp: 127, last: '--', note: -1, act: false }));
 }
+function buildWaveRows(waves) {
+  let sec = document.getElementById('waveRows');
+  if (sec) sec.remove();
+  if (!waves?.length) return;
+  const tb = $('chTable');
+  sec = document.createElement('tbody');
+  sec.id = 'waveRows';
+  const hdr = document.createElement('tr');
+  hdr.innerHTML = `<td colspan="7" style="color:var(--accent2);font-weight:600;padding-top:4px">PCM Waves (ext / Mwa / inline)</td>`;
+  sec.appendChild(hdr);
+  waves.slice(0, 12).forEach((w, i) => {
+    const tr = document.createElement('tr');
+    const idTxt = w.id !== undefined ? `#${w.id}` : `M${i}`;
+    tr.innerHTML = `<td>W${i}</td><td class="prog">${w.src}${w.type ? ' t' + w.type : ''}</td><td class="note">${idTxt}</td><td>${w.hz ? w.hz + 'Hz' : '--'}</td><td>${w.stereo ? 'st' : 'mo'}</td><td>--</td><td class="evt">${(w.size / 1024).toFixed(1)}K</td>`;
+    sec.appendChild(tr);
+  });
+  if (waves.length > 12) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td colspan="7" style="color:var(--dim)">… +${waves.length - 12} more</td>`;
+    sec.appendChild(tr);
+  }
+  tb.appendChild(sec);
+}
 function chOnTrack(meta) {
   // 载入即出解析摘要日志（静态对照用，带曲目时间标记）
   const nNotes = meta?.notes?.length ?? 0;
@@ -411,6 +438,8 @@ function chOnTrack(meta) {
   const last = meta?.notes?.length ? meta.notes.reduce((m2, n) => n.end > m2 ? n.end : m2, 0) : 0;
   log(`[vis] parsed: ${nNotes} notes, ch=[${usedCh.join(',')}], span 0→${last.toFixed(2)}s (dur ${(meta?.durationMs / 1000 || 0).toFixed(1)}s)`);
   if (!nNotes) log('[vis] ⚠ no notes parsed (compressed/SEQU format not supported for piano)');
+  buildWaveRows(meta?.waves);
+  if (meta?.waves?.length) log(`[vis] PCM waves: ${meta.waves.length} registered (${[...new Set(meta.waves.map(w => w.src))].join('+')})`);
   for (const c of chVis.chans) { c.ev = []; c.notes = []; c.ei = 0; c.ni = 0; c.pc = -1; c.vol = 100; c.pan = 64; c.exp = 127; c.last = '--'; c.note = -1; c.act = false; }
   for (const e of meta?.chEv ?? []) chVis.chans[e.ch]?.ev.push(e);
   for (const n of meta?.notes ?? []) chVis.chans[n.ch]?.notes.push(n);
@@ -437,7 +466,7 @@ function updateChTable(tSec) {
     const tds = tr.children;
     tr.classList.toggle('on', c.act || c.pc >= 0);
     tds[1].textContent = i === 9 ? 'Drums' : c.pc >= 0 ? `${c.pc} ${GM_NAMES[c.pc] ?? '?'}` : '—';
-    tds[2].textContent = note >= 0 ? noteName(note) : '--';
+    tds[2].textContent = note >= 0 ? (i === 9 ? (GM_DRUMS[note] ?? noteName(note)) : noteName(note)) : '--';
     tds[3].textContent = c.vol;
     tds[4].textContent = c.pan === 64 ? 'C' : (c.pan > 64 ? 'R' + (c.pan - 64) : 'L' + (64 - c.pan));
     tds[5].textContent = c.exp;

@@ -263,8 +263,29 @@ function parseTrack(u8, off, size, chBase, out) {
     } else if (sig === SIG.EXVO) {              // 整块 SysEx
       let len; [len] = varint(u8, p, csz, true);
       if (len > 0) out.excls.push(u8.slice(p + 1, p + 1 + len - 1 > end ? end : p + len - 1));
+    } else if (sig === 0x4D747370) {            // "Mtsp"：PCM 波形块（Mwa 序列）
+      let mp = p; const me = p + csz;
+      while (me - mp >= 11 && u8[mp] === 0x4D && u8[mp + 1] === 0x77 && u8[mp + 2] === 0x61) {
+        const type = u8[mp + 3];
+        const len2 = u32(u8, mp + 4);
+        if (len2 > 3 && 8 + len2 <= me - mp) {
+          let hz = (u8[mp + 9] << 8) | u8[mp + 10];
+          if (hz < 4000 || hz > 48000) hz = 16000;
+          out.waves.push({ src: 'Mwa', type, stereo: (u8[mp + 8] & 0x80) !== 0, hz, size: len2 - 3 });
+          mp += 8 + len2;
+        } else break;
+      }
     }
     p += csz;
+  }
+}
+/* SysEx 波形注册检测（D500/D520 内嵌波：43 79 07 7F 03 waveId / 43 05 00 waveId） */
+function scanWaveSysEx(excls, waves) {
+  for (const d of excls) {
+    if (d.length >= 6 && d[0] === 0x43 && d[1] === 0x79 && d[2] === 0x07 && d[3] === 0x7F && d[4] === 0x03)
+      waves.push({ src: 'Inline', type: 4, id: d[5], stereo: false, hz: 0, size: d.length - 6 });
+    else if (d.length >= 4 && d[0] === 0x43 && d[1] === 0x05 && d[2] === 0x00)
+      waves.push({ src: 'Inline', type: 4, id: d[3], stereo: false, hz: 0, size: d.length - 4 });
   }
 }
 
@@ -321,7 +342,7 @@ export function parseMMF(buf) {
   let p = 8;
   const end = u8.length - 2;                    // 尾部 CRC
   let trackIdx = 0;
-  const out1 = { ...out, notes: [], excls: [], tracks: [], chEv: [], durTb: 2, gateTb: 2, durMs: 0 };
+  const out1 = { ...out, notes: [], excls: [], tracks: [], chEv: [], waves: [], durTb: 2, gateTb: 2, durMs: 0 };
   while (p + 8 <= end) {
     const sig = u32(u8, p), csz = u32(u8, p + 4);
     p += 8;
@@ -357,6 +378,7 @@ export function parseMMF(buf) {
     }
     p += csz;
   }
+  scanWaveSysEx(out1.excls, out1.waves);
   out1.version = versionFromCnti(out1.cntiStream ?? new Uint8Array(0)) || versionFromExcls(out1.excls);
   out1.maName = { 1: 'MA-1', 2: 'MA-2', 3: 'MA-3', 5: 'MA-5', 7: 'MA-7' }[out1.version] ?? 'Unknown';
   // 曲长 = 最后事件时间与最长音符结束的较大者
