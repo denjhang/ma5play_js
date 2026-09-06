@@ -244,72 +244,102 @@ const piano = (() => {
   const c = $('piano'), g = c.getContext('2d');
   const MIN_NOTE = 12, MAX_NOTE = 107;            // C0..B8（同 ma2play）
   const isBlack = n => [1, 3, 6, 8, 10].includes(n % 12);
-  let notes = [], cursor = 0;
-  // blendKey：通道色向白/黑键底色混合，blendLv = 0.55 + lv*0.45（同 ma2play）
+  const KEY_RATIO = 6.2;                          // 白键长 = 6.2×白键宽（真钢琴 ~150/23.5mm）
+  let notes = [], cursor = 0, layout = null;
   const blendKey = (col, lv, black) => {
     const b = black ? 20 : 255, bl = 0.55 + lv * 0.45;
     return `rgb(${b + ((col[0] - b) * bl) | 0},${b + ((col[1] - b) * bl) | 0},${b + ((col[2] - b) * bl) | 0})`;
   };
+  // 布局：窄屏（<700px）白键对半拆两行；行高 = 键宽×真比例（上限防过长）
+  function relayout(cssW) {
+    const rows = cssW < 700 ? 2 : 1;
+    let numWhite = 0;
+    for (let n = MIN_NOTE; n <= MAX_NOTE; n++) if (!isBlack(n)) numWhite++;
+    const wkW = cssW / (rows === 1 ? numWhite : Math.ceil(numWhite / 2));
+    const wkH = Math.min(Math.round(wkW * KEY_RATIO), 86);
+    const rowRanges = [];
+    if (rows === 1) rowRanges.push([MIN_NOTE, MAX_NOTE]);
+    else {
+      const half = Math.ceil(numWhite / 2);
+      let seen = 0, split = MAX_NOTE;
+      for (let n = MIN_NOTE; n <= MAX_NOTE; n++) {
+        if (!isBlack(n)) { if (seen === half) { split = n - 1; break; } seen++; }
+      }
+      rowRanges.push([MIN_NOTE, split], [split + 1, MAX_NOTE]);
+    }
+    return { wkW, wkH, rowRanges, cssH: rows * wkH + (rows - 1) * 4 };
+  }
   function draw() {
     requestAnimationFrame(draw);
-    const W = c.width, H = c.height;
-    const t = S.playedFrames / FRAMES_PER_SEC;
-    // 活跃音符表（同 s_activeNotes 逻辑：level = vel/127，同名取最大）
+    const cssW = c.clientWidth || 600;
+    if (!layout || layout.forW !== cssW) {
+      layout = relayout(cssW); layout.forW = cssW;
+      const dpr = window.devicePixelRatio || 1;
+      c.width = cssW * dpr; c.height = layout.cssH * dpr;
+      c.style.height = layout.cssH + 'px';
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    // 同步时钟：音频消费帧数 − 输出延迟（双后端对齐点：播放走 ma5t、
+    // 可视化走 parser 乐谱，两者在此汇合）。延迟取 AudioContext 实测值。
+    const latency = (ctx?.outputLatency || ctx?.baseLatency || 0);
+    const t = Math.max(0, (S.playedFrames / FRAMES_PER_SEC) - latency);
     const active = new Map();
+    const FADE = 0.12;                             // 键释放渐隐（秒）
     while (cursor < notes.length && notes[cursor].end < t - 0.5) cursor++;
     for (let i = cursor; i < notes.length; i++) {
       const nt = notes[i];
       if (nt.t > t) break;
-      if (nt.end < t || nt.note < 0 || nt.note > 127) continue;
-      let lv = nt.vel / 127;
-      lv = Math.min(1, Math.max(0.15, lv));
+      if (nt.note < 0 || nt.note > 127) continue;
+      let lv;
+      if (nt.end >= t) lv = Math.min(1, Math.max(0.15, nt.vel / 127));          // 按住
+      else if (nt.end > t - FADE) lv = Math.max(0, nt.vel / 127) * (1 - (t - nt.end) / FADE);  // 释放渐隐
+      else continue;
+      if (lv <= 0.02) continue;
       const prev = active.get(nt.note);
       if (!prev || lv > prev.lv) active.set(nt.note, { lv, ch: nt.ch });
     }
-    // 布局（同 ma2play：白键数分宽，黑键 0.65 倍、右偏半键）
-    const numWhite = (() => { let k = 0; for (let n = MIN_NOTE; n <= MAX_NOTE; n++) if (!isBlack(n)) k++; return k; })();
-    const wkW = Math.max(4, W / numWhite);
-    const bkW = wkW * 0.65;
-    const wkH = H - 4, bkH = wkH * 0.62;
-    g.clearRect(0, 0, W, H);
-    // Pass 1: 白键
-    let wkIdx = 0;
-    for (let n = MIN_NOTE; n <= MAX_NOTE; n++) {
-      if (isBlack(n)) continue;
-      const x = wkIdx * wkW;
-      const a = active.get(n);
-      g.fillStyle = a ? blendKey(CH_COLORS[a.ch], a.lv, false) : 'rgb(255,255,255)';
-      g.fillRect(x, 0, wkW - 1, wkH);
-      g.strokeStyle = 'rgb(80,80,80)';
-      g.strokeRect(x + 0.5, 0.5, wkW - 1, wkH - 1);
-      if (n % 12 === 0 && wkW > 16) {                    // C 音名
-        g.fillStyle = 'rgba(0,0,0,0.7)';
-        g.font = '9px system-ui';
-        g.fillText(`C${(n / 12) - 1}`, x + 2, wkH - 4);
+    const { wkW, wkH, rowRanges } = layout;
+    const bkW = wkW * 0.65, bkH = wkH * 0.62;
+    g.clearRect(0, 0, cssW, layout.cssH);
+    rowRanges.forEach(([lo, hi], r) => {
+      const y = r * (wkH + 4);
+      let wkIdx = 0;
+      for (let n = lo; n <= hi; n++) {                        // Pass 1: 白键
+        if (isBlack(n)) continue;
+        const x = wkIdx * wkW;
+        const a = active.get(n);
+        g.fillStyle = a ? blendKey(CH_COLORS[a.ch], a.lv, false) : 'rgb(255,255,255)';
+        g.fillRect(x, y, wkW - 1, wkH);
+        g.strokeStyle = 'rgb(80,80,80)';
+        g.strokeRect(x + 0.5, y + 0.5, wkW - 1, wkH - 1);
+        if (n % 12 === 0 && wkW > 16) {
+          g.fillStyle = 'rgba(0,0,0,0.7)';
+          g.font = '9px system-ui';
+          g.fillText(`C${(n / 12) - 1}`, x + 2, y + wkH - 4);
+        }
+        if (a && wkW > 12) {
+          g.fillStyle = 'rgba(0,0,0,0.78)';
+          g.font = '8px system-ui';
+          g.fillText(CH_NAMES[a.ch], x + 1, y + 10);
+        }
+        wkIdx++;
       }
-      if (a && wkW > 12) {                               // 通道标签
-        g.fillStyle = 'rgba(0,0,0,0.78)';
-        g.font = '8px system-ui';
-        g.fillText(CH_NAMES[a.ch], x + 1, 10);
+      wkIdx = 0;
+      for (let n = lo; n <= hi; n++) {                        // Pass 2: 黑键
+        if (!isBlack(n)) { wkIdx++; continue; }
+        const x = (wkIdx - 1) * wkW + wkW - bkW * 0.5;
+        const a = active.get(n);
+        g.fillStyle = a ? blendKey(CH_COLORS[a.ch], a.lv, true) : 'rgb(20,20,20)';
+        g.fillRect(x, y, bkW, bkH);
+        g.strokeStyle = 'rgb(0,0,0)';
+        g.strokeRect(x + 0.5, y + 0.5, bkW - 1, bkH - 1);
+        if (a && bkW > 8) {
+          g.fillStyle = 'rgba(255,255,255,0.78)';
+          g.font = '8px system-ui';
+          g.fillText(CH_NAMES[a.ch], x + 1, y + 10);
+        }
       }
-      wkIdx++;
-    }
-    // Pass 2: 黑键（x = 前一白键右缘 - 半个黑键宽）
-    wkIdx = 0;
-    for (let n = MIN_NOTE; n <= MAX_NOTE; n++) {
-      if (!isBlack(n)) { wkIdx++; continue; }
-      const x = (wkIdx - 1) * wkW + wkW - bkW * 0.5;
-      const a = active.get(n);
-      g.fillStyle = a ? blendKey(CH_COLORS[a.ch], a.lv, true) : 'rgb(20,20,20)';
-      g.fillRect(x, 0, bkW, bkH);
-      g.strokeStyle = 'rgb(0,0,0)';
-      g.strokeRect(x + 0.5, 0.5, bkW - 1, bkH - 1);
-      if (a && bkW > 8) {
-        g.fillStyle = 'rgba(255,255,255,0.78)';
-        g.font = '8px system-ui';
-        g.fillText(CH_NAMES[a.ch], x + 1, 10);
-      }
-    }
+    });
   }
   requestAnimationFrame(draw);
   return { onTrack(meta) { notes = (meta?.notes ?? []).slice().sort((a, b) => a.t - b.t); cursor = 0; } };

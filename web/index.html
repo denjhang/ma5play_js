@@ -43,19 +43,13 @@
 
   <!-- ============ Right section ============ -->
   <section class="right">
-    <!-- Top row: piano + channel status -->
-    <div class="toprow">
-      <div class="panel pianopanel">
-        <div class="panel-title">Piano</div>
-        <canvas id="piano" width="900" height="110"></canvas>
-      </div>
-      <div class="panel statuspanel">
-        <div class="panel-title">Channels <span class="dim">(48ch snapshot: coming with AudioWorklet)</span></div>
-        <div class="chgrid" id="chGrid"></div>
-      </div>
+    <!-- Piano full width -->
+    <div class="panel pianopanel">
+      <div class="panel-title">Piano</div>
+      <canvas id="piano" width="900" height="110"></canvas>
     </div>
 
-    <!-- Bottom row: file browser + log -->
+    <!-- Bottom row: file browser + channels/log combined -->
     <div class="bottomrow">
       <div class="panel browser">
         <!-- Transport (same position as ma2play SMAF Player header) -->
@@ -91,7 +85,9 @@
         <ul class="list browserlist" id="fileList"></ul>
       </div>
       <div class="panel logpanel">
-        <div class="panel-title">Log</div>
+        <div class="panel-title">Channels <span class="dim">(48ch snapshot: coming with AudioWorklet)</span></div>
+        <div class="chgrid" id="chGrid"></div>
+        <div class="panel-title" style="margin-top:8px">Log</div>
         <div class="log" id="log"></div>
       </div>
     </div>
