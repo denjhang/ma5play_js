@@ -260,11 +260,12 @@ const piano = (() => {
   };
   // 布局：窄屏（<700px）白键对半拆两行；行高 = 键宽×真比例（上限防过长）
   function relayout(cssW) {
-    const rows = cssW < 700 ? 2 : 1;
+    const shortVp = window.innerHeight < 520;               // 手机横屏等矮视口
+    const rows = (cssW < 700 || shortVp) ? 2 : 1;
     let numWhite = 0;
     for (let n = MIN_NOTE; n <= MAX_NOTE; n++) if (!isBlack(n)) numWhite++;
     const wkW = cssW / (rows === 1 ? numWhite : Math.ceil(numWhite / 2));
-    const wkH = Math.min(Math.round(wkW * KEY_RATIO), 86);
+    const wkH = Math.min(Math.round(wkW * KEY_RATIO), shortVp ? 64 : 86);
     const rowRanges = [];
     if (rows === 1) rowRanges.push([MIN_NOTE, MAX_NOTE]);
     else {
@@ -280,8 +281,8 @@ const piano = (() => {
   function draw() {
     requestAnimationFrame(draw);
     const cssW = c.clientWidth || 600;
-    if (!layout || layout.forW !== cssW) {
-      layout = relayout(cssW); layout.forW = cssW;
+    if (!layout || layout.forW !== cssW || layout.forH !== window.innerHeight) {
+      layout = relayout(cssW); layout.forW = cssW; layout.forH = window.innerHeight;
       const dpr = window.devicePixelRatio || 1;
       c.width = cssW * dpr; c.height = layout.cssH * dpr;
       c.style.height = layout.cssH + 'px';

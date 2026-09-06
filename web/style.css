@@ -171,7 +171,7 @@ body {
 
 .foot { text-align: center; color: #525d78; font-size: 11px; padding: 8px 0 12px; }
 
-@media (max-width: 820px) {
+@media (max-width: 820px), (max-height: 520px) {   /* 手机横屏（矮视口）同样走移动布局 */
   .layout { flex-direction: column; padding: 8px; gap: 8px; }
   .side { width: 100%; }
   .bottomrow { flex-direction: column; }
