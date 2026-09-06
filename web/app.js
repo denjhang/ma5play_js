@@ -485,16 +485,19 @@ function buildNonMidiRows(body, meta, addGroup) {
     meta.waves.slice(0, 10).forEach((w, wi) => {
       const isMwa = w.src === 'Mwa';
       const kind = isMwa ? 'mwa' : 'ext';
-      addRow('wave' + wi, isMwa ? 'm' + (w.id ?? 0) : 'e' + (w.id ?? 0),
+      addRow('wave' + wi, isMwa ? 'm' + seq.mwa : 'e' + (w.id ?? 0),
         ROW_COLORS[kind],
-        { prog: isMwa ? 'Mwa Chunk' : 'Inline Wave', note: '#' + (seq[kind]++), evt: kind },
-        { kind: 'wave', src: kind });
+        { prog: isMwa ? `Mwa ${w.hz / 1000 | 0}kHz${w.stereo ? ' st' : ''}` : 'Inline Wave', note: '#' + (seq[kind]++), evt: kind },
+        { kind: 'wave', src: kind, extIdx: isMwa ? -1 : seq[kind] - 1 });
     });
   }
-  // PCM/Wave 音色表：channel 当前 (bankL,pc) 命中非 FM 音色 → 该通道发声时激活 ext wave 行
-  chVis.pcmVoices = new Set(
-    (meta?.voices ?? []).filter(v => v.vtype && v.vtype !== 'FM' && v.pc !== undefined)
-      .map(v => (v.bankL ?? 0) + ':' + v.pc));
+  // ext 波归因表（LG KG920 语料静态结论）：bankM=124 通道按 (bankL,pc) 命中
+  // PCM 音色（vtype≠FM），PCM 音色注册序 ↔ ext 波 id 序一一对应；
+  // bankM=125/bankL=0 = Mwa 流通道（不走音色匹配）。voice→wave 的精确链接
+  // 在 DLL 内部，此处为注册序近似，AudioWorklet 快照后换核心实时数据。
+  chVis.pcmVoices = new Map();
+  (meta?.voices ?? []).filter(v => v.vtype && v.vtype !== 'FM' && v.pc !== undefined)
+    .forEach((v, i) => { const k = (v.bankL ?? 0) + ':' + v.pc; if (!chVis.pcmVoices.has(k)) chVis.pcmVoices.set(k, i); });
 }
 
 function updateChTable(tSec) {
@@ -531,18 +534,26 @@ function updateChTable(tSec) {
   updateExtraRows(tSec, activeNotes);
 }
 
-/* 非 MIDI 行播放期更新（parser 静态数据 + 音符归因，AudioWorklet 快照前的过渡方案）：
+/* 非 MIDI 行播放期更新（parser 静态数据 + bankM/bankL 音符归因，AudioWorklet 快照前的过渡方案）：
  * ATR = 音轨存在且正在播放即激活；PCM P 行 = 对应鼓音正在发声；
- * wave 行 = 通道当前 (bankL,pc) 命中非 FM 音色且正在发声（ext 行，mwa 无触发时序暂不归因）。 */
+ * ext wave 行 = bankM=124 通道 (bankL,pc) 命中 PCM 音色（注册序 ↔ ext id 序），各行独立音高；
+ * mwa 行 = bankM=125 流通道正在发声（流不按音高触发，Note 显示 stream）。 */
 function updateExtraRows(tSec, activeNotes) {
   if (!chVis.extra?.length) return;
   const drumNotes = activeNotes.filter(a => a.ch === 9);
-  // 通道 → 当前 bankL:pc（沿用 MIDI 行已推进的状态）
-  const pcmChNote = activeNotes.map(a => {
+  // 每个 PCM 音色（voiceIdx）当前发声的最高音；mwa 流通道是否有发声
+  const extAct = new Map();       // voiceIdx -> note
+  let mwaAct = false;
+  for (const a of activeNotes) {
     const c = chVis.chans[a.ch];
-    return (c && chVis.pcmVoices?.has((c.bankL ?? 0) + ':' + (c.pc ?? -1))) ? a : null;
-  }).filter(Boolean);
-  const extAct = pcmChNote.length > 0;
+    if (!c) continue;
+    if (c.bankM === 125) { mwaAct = true; continue; }
+    if (c.bankM !== 124) continue;
+    const vi = chVis.pcmVoices?.get((c.bankL ?? 0) + ':' + (c.pc ?? -1));
+    if (vi === undefined) continue;
+    const prev = extAct.get(vi);
+    if (prev === undefined || a.note > prev) extAct.set(vi, a.note);
+  }
   for (const x of chVis.extra) {
     let act = false, noteTxt = null, evt = null;
     if (x.kind === 'atr') { act = x.hasData && S.playing; if (act) evt = 'play'; }
@@ -550,16 +561,16 @@ function updateExtraRows(tSec, activeNotes) {
       act = drumNotes.some(d => d.note === x.noteNum);
       if (act) { noteTxt = noteName(x.noteNum); evt = 'hit'; }
     } else if (x.kind === 'wave') {
-      if (x.src === 'ext' && extAct) {
-        act = true;
-        noteTxt = noteName(pcmChNote[pcmChNote.length - 1].note);
-        evt = 'wave';
+      if (x.src === 'mwa' && mwaAct) { act = true; noteTxt = 'stream'; evt = 'mwa'; }
+      else if (x.src === 'ext') {
+        const n = extAct.get(x.extIdx);
+        if (n !== undefined) { act = true; noteTxt = noteName(n); evt = 'wave'; }
       }
     }
     x.tr.classList.toggle('on', act);
     const tds = x.tr.children;
     if (noteTxt !== null && noteTxt !== x.noteShown) { x.noteShown = noteTxt; tds[2].textContent = noteTxt; }
-    else if (noteTxt === null && x.noteShown) { x.noteShown = ''; tds[2].textContent = tds[2].dataset.baseNote ?? (tds[2].dataset.baseNote = tds[2].textContent); }
+    else if (noteTxt === null && x.noteShown) { x.noteShown = ''; tds[2].textContent = tds[2].dataset.baseNote ?? '--'; }
     tds[6].textContent = evt ?? x.tr.dataset.baseEvt;
   }
 }
